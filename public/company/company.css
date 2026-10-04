@@ -1,0 +1,44 @@
+.me { width: 32px; height: 32px; border-radius: 50%; background: #e3ebff; color: #3b5bdb; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+.layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 57px); }
+.side { border-right: 1px solid var(--line); background: #fff; padding: 16px; }
+.side-title { font-size: 13px; color: var(--muted); margin: 18px 0 8px; }
+.main { padding: 24px; max-width: 920px; width: 100%; }
+@media (max-width: 760px) {
+  .layout { grid-template-columns: 1fr; }
+  .side { border-right: 0; border-bottom: 1px solid var(--line); }
+  .main { padding: 16px; }
+}
+
+.job-link { display: block; width: 100%; text-align: left; border: 0; background: none; border-radius: 10px; padding: 10px 12px; margin-bottom: 4px; }
+.job-link:hover { background: var(--bg); }
+.job-link.on { background: #e9f0ff; }
+.job-link b { display: block; font-size: 14px; }
+.job-link span { font-size: 12px; color: var(--muted); }
+
+.panel { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.seg { display: inline-flex; background: #f1efe9; border-radius: 10px; padding: 4px; margin-bottom: 16px; }
+.seg button { border: 0; background: none; padding: 8px 18px; border-radius: 8px; color: var(--muted); }
+.seg button.on { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.upload { display: flex; align-items: center; gap: 10px; background: #e9f7ef; border-radius: 10px; padding: 12px 14px; margin-bottom: 6px; }
+.ai-note { color: var(--green-dark); font-size: 13px; margin-bottom: 16px; }
+.form-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
+
+/* 應徵者 */
+.applicants { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+@media (max-width: 760px) { .applicants { grid-template-columns: 1fr; } }
+.app-link { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
+.app-link.on { background: #e3ebff; border-color: #c5d4ff; }
+.app-link b { display: block; }
+.app-link span { font-size: 13px; color: var(--muted); }
+.app-link span.warn { color: var(--amber); }
+.app-link.dim { opacity: .5; }
+.person { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+.person .avatar { width: 52px; height: 52px; border-radius: 50%; background: var(--green-soft); color: var(--green-dark); display: grid; place-items: center; font-size: 20px; font-weight: 700; flex: none; }
+.person h2 { margin: 0 0 4px; font-size: 20px; }
+.person .acts { margin-left: auto; display: flex; gap: 8px; }
+.contact { display: flex; flex-wrap: wrap; gap: 18px; background: var(--bg); border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 14px; }
+.ai-box { border: 2px solid #ffb4a8; border-radius: 14px; padding: 14px; margin-bottom: 16px; }
+.ai-box .sum { background: var(--bg); border-radius: 10px; padding: 10px 12px; margin: 8px 0 10px; line-height: 1.6; }
+.info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.exp { border-left: 3px solid var(--line); padding-left: 12px; margin-bottom: 10px; }
+.status-pill { font-size: 12px; padding: 2px 8px; border-radius: 6px; background: var(--bg); color: var(--muted); }

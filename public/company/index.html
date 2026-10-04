@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>實習 Swipe 企業後台</title>
+  <link rel="stylesheet" href="/shared/style.css" />
+  <link rel="stylesheet" href="company.css" />
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1><span class="logo">💼</span>實習 Swipe・企業後台 <span class="muted small" id="crumb"></span></h1>
+    <span class="me" id="me"></span>
+  </header>
+  <div class="layout">
+    <aside class="side">
+      <button class="btn primary block" id="new-job">＋ 刊登職缺</button>
+      <div class="side-title">我的職缺</div>
+      <div id="job-list"></div>
+    </aside>
+    <main class="main" id="main"></main>
+  </div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

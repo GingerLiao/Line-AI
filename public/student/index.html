@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>實習 Swipe</title>
+  <link rel="stylesheet" href="/shared/style.css" />
+  <link rel="stylesheet" href="student.css" />
+  <!-- LINE 前端框架 LIFF -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <!-- 手勢庫：滑卡 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <h1><span class="logo">💼</span><span id="page-title">找實習</span></h1>
+    <button class="icon-btn" id="open-filter" title="篩選條件">⚙︎</button>
+  </header>
+
+  <!-- 分頁 1：滑卡找實習 -->
+  <main id="tab-swipe" class="tab">
+    <div id="deck" class="deck"></div>
+    <div class="actions" id="actions">
+      <div><button class="round skip" data-act="skip" title="跳過">✕</button><small>跳過</small></div>
+      <div><button class="round save" data-act="save" title="收藏・提醒">🔔</button><small>收藏・提醒</small></div>
+      <div><button class="round apply" data-act="apply" title="投遞">➤</button><small>投遞</small></div>
+    </div>
+    <p class="hint">← 左滑跳過　↑ 上滑收藏　右滑投遞 →</p>
+  </main>
+
+  <!-- 分頁 2：履歷 -->
+  <main id="tab-resumes" class="tab hidden">
+    <div id="resume-list" class="list"></div>
+    <div class="pad"><button class="btn block" id="new-resume">＋ 建立新履歷</button></div>
+  </main>
+
+  <!-- 分頁 3：收藏與投遞 -->
+  <main id="tab-saved" class="tab hidden">
+    <div id="saved-list" class="list"></div>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="swipe" class="on">🃏<span>找實習</span></button>
+    <button data-tab="resumes">📄<span>我的履歷</span></button>
+    <button data-tab="saved">🔖<span>收藏・投遞</span></button>
+  </nav>
+
+  <div id="sheet-root"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

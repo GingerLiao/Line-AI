@@ -1,0 +1,65 @@
+body { padding-bottom: 72px; min-height: 100vh; }
+.tab { max-width: 480px; margin: 0 auto; }
+.pad { padding: 0 16px 16px; }
+
+/* 卡片堆疊 */
+.deck { position: relative; height: min(62vh, 480px); margin: 16px; }
+.card {
+  position: absolute; inset: 0; background: var(--card); border: 1px solid var(--line);
+  border-radius: 18px; padding: 18px; box-shadow: 0 6px 20px rgba(0,0,0,.06);
+  overflow: hidden; touch-action: none; user-select: none; will-change: transform;
+  display: flex; flex-direction: column;
+}
+.card.behind { transform: scale(.96) translateY(10px); opacity: .7; }
+.card.animate { transition: transform .3s ease, opacity .3s ease; }
+.card-head { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+.avatar { width: 48px; height: 48px; border-radius: 12px; background: var(--green-soft); color: var(--green-dark); display: grid; place-items: center; font-weight: 700; flex: none; }
+.card-head h3 { margin: 0 0 4px; font-size: 17px; }
+.card p.desc { margin: 0 0 12px; line-height: 1.6; color: #333; }
+.facts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.reqs { font-size: 14px; display: grid; gap: 6px; padding-top: 10px; }
+.reqs b { color: var(--muted); font-weight: 500; margin-right: 6px; }
+.more { margin-top: auto; text-align: center; color: var(--green-dark); font-size: 13px; padding-top: 10px; }
+.match { position: absolute; top: 14px; right: 14px; }
+.stamp {
+  position: absolute; top: 28px; padding: 4px 12px; border: 3px solid; border-radius: 8px;
+  font-weight: 800; font-size: 22px; opacity: 0; transform: rotate(-12deg);
+}
+.stamp.apply { left: 20px; color: var(--green); }
+.stamp.skip { right: 20px; color: var(--red); transform: rotate(12deg); }
+.stamp.save { left: 50%; top: auto; bottom: 40px; transform: translateX(-50%); color: var(--amber); }
+
+.actions { display: flex; justify-content: center; gap: 28px; text-align: center; }
+.actions small { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
+.round { width: 58px; height: 58px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.round.skip { color: var(--red); }
+.round.save { color: var(--amber); }
+.round.apply { background: var(--green); border-color: var(--green); color: #fff; width: 64px; height: 64px; }
+.hint { text-align: center; font-size: 12px; color: var(--muted); }
+
+/* 底部分頁列 */
+.tabbar {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 20; background: #fff; border-top: 1px solid var(--line);
+  display: flex; padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar button { flex: 1; border: 0; background: none; padding: 8px 0 10px; font-size: 18px; color: var(--muted); }
+.tabbar button span { display: block; font-size: 12px; }
+.tabbar button.on { color: var(--green-dark); }
+
+/* 清單 */
+.list { padding: 16px; display: grid; gap: 12px; }
+.item { background: #fff; border: 1px solid var(--line); border-radius: var(--radius); padding: 14px; }
+.item-row { display: flex; align-items: center; gap: 10px; }
+.item-row .grow { flex: 1; min-width: 0; }
+.item h4 { margin: 0 0 4px; font-size: 15px; }
+
+/* 篩選面板 */
+.filter-group { margin-bottom: 18px; }
+.filter-group > .label { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; justify-content: space-between; }
+.filter-group > .label em { font-style: normal; color: var(--green-dark); font-weight: 500; }
+input[type=range] { width: 100%; accent-color: var(--green); }
+
+/* 選履歷 */
+.radio-card { display: flex; gap: 12px; align-items: center; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin-bottom: 10px; cursor: pointer; }
+.radio-card.on { border-color: #9fdcb7; background: #f3fbf6; }
+.radio-card input { accent-color: var(--green); width: 18px; height: 18px; }
