@@ -16,7 +16,8 @@ function createFirestoreDb() {
   return import('firebase-admin/app').then(async ({ initializeApp, applicationDefault }) => {
     const { getFirestore } = await import('firebase-admin/firestore');
     initializeApp({ credential: applicationDefault() });
-    const store = getFirestore();
+    // 資料庫 ID 不是預設的 (default) 時，用 FIRESTORE_DATABASE_ID 指定
+    const store = process.env.FIRESTORE_DATABASE_ID ? getFirestore(process.env.FIRESTORE_DATABASE_ID) : getFirestore();
     store.settings({ ignoreUndefinedProperties: true }); // 欄位是 undefined 時略過，不要報錯
 
     const withId = (doc) => (doc.exists ? { id: doc.id, ...doc.data() } : null);
