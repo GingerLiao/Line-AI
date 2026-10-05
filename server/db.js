@@ -17,6 +17,7 @@ function createFirestoreDb() {
     const { getFirestore } = await import('firebase-admin/firestore');
     initializeApp({ credential: applicationDefault() });
     const store = getFirestore();
+    store.settings({ ignoreUndefinedProperties: true }); // 欄位是 undefined 時略過，不要報錯
 
     const withId = (doc) => (doc.exists ? { id: doc.id, ...doc.data() } : null);
 

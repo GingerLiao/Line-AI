@@ -338,16 +338,31 @@ ngrok 會給你一個 `https://xxxx.ngrok-free.app` 的網址：
 
 ## 第 8 關：部署上線 + 圖文選單
 
-### 8-1 部署到 Render（範例）
+### 8-1 部署到 Render（免費方案）
 
-1. 程式推到 GitHub
-2. [Render](https://render.com/) → **New → Web Service** → 選這個 repo
-   - Build Command：`npm install`
-   - Start Command：`npm start`
-3. **Environment** 填入 `.env` 的所有變數；`serviceAccount.json` 用 **Secret Files** 上傳，`GOOGLE_APPLICATION_CREDENTIALS=/etc/secrets/serviceAccount.json`
-4. 部署完成後，把 LIFF Endpoint URL 與 `PUBLIC_BASE_URL` 改成 Render 給的網址
+> 先完成第 7 關（Firestore）。Render 的硬碟是暫時的，每次部署都會清空 `data/db.json`。
 
-> ⏰ **排程注意**：`node-cron` 需要伺服器一直開著。免費方案閒置會休眠，提醒可能不會準時發送。Demo 前可以改用付費方案，或用 Cloud Scheduler 等外部排程定時呼叫一個觸發提醒的 API（參考 `server/index.js` 裡 `/api/dev/run-reminders` 的寫法，並加上密鑰保護）。
+1. [Render](https://render.com/) 用 GitHub 登入 → **New → Web Service** → 選這個 repo
+2. 設定：Region **Singapore**、Branch 選你的分支、Build `npm install`、Start `npm start`、Instance **Free**
+3. **Environment Variables**：把 `.env` 的值逐一加入（`PORT`、`PUBLIC_BASE_URL` 先不用填），另外新增：
+   - `GOOGLE_APPLICATION_CREDENTIALS` = `/etc/secrets/serviceAccount.json`
+   - `CRON_SECRET` = 一串自己想的長密碼（英數字）
+4. **Secret Files** → 新增檔名 `serviceAccount.json`，內容貼上 Firebase 金鑰檔的全部文字
+5. **Deploy**，完成後拿到 `https://xxx.onrender.com`
+6. 兩個 LIFF Endpoint URL 改成 `https://xxx.onrender.com/student/`、`/company/`；Render 加上 `PUBLIC_BASE_URL`
+
+**之後更新**：程式推到 GitHub，Render 會自動重新部署（約 2–3 分鐘），網址不變。
+
+### 8-1.5 用 cron-job.org 解決休眠與提醒
+
+免費方案 15 分鐘沒人用會休眠，下一位使用者要等 30–60 秒，內建的 node-cron 也會跟著停。到 [cron-job.org](https://cron-job.org/)（免費）建立兩個排程：
+
+| 名稱 | 網址 | 頻率 |
+| --- | --- | --- |
+| 保持清醒 | `https://xxx.onrender.com/healthz` | 每 10 分鐘 |
+| 截止提醒 | `https://xxx.onrender.com/api/cron/reminders?key=你的CRON_SECRET` | 每天 09:00（時區選 Asia/Taipei） |
+
+有設定 `CRON_SECRET` 時，程式就不會再啟動內建排程，改由外部呼叫；同一筆收藏只會提醒一次，重複呼叫不會重複推播。
 
 ### 8-2 兩個入口：學生用圖文選單、企業用網站
 

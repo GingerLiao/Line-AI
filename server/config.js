@@ -22,6 +22,9 @@ export const config = {
 
   firestoreEnabled: Boolean(env.GOOGLE_APPLICATION_CREDENTIALS),
 
+  // 外部排程（例如 cron-job.org）觸發截止提醒用的密碼；有設定就不啟動程式內建的排程
+  cronSecret: env.CRON_SECRET || '',
+
   reminder: {
     cron: env.REMINDER_CRON || '0 9 * * *',
     daysBefore: Number(env.REMINDER_DAYS_BEFORE || 3),
