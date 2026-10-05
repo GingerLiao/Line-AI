@@ -17,6 +17,7 @@ app.get('/api/config', (req, res) => {
     demoMode,
     liffIdStudent: config.line.liffIdStudent,
     liffIdCompany: config.line.liffIdCompany,
+    oaBasicId: config.line.oaBasicId,
   });
 });
 

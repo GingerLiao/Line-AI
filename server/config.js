@@ -11,6 +11,8 @@ export const config = {
     liffIdStudent: env.LIFF_ID_STUDENT || '',
     liffIdCompany: env.LIFF_ID_COMPANY || '',
     channelAccessToken: env.LINE_CHANNEL_ACCESS_TOKEN || '',
+    // 官方帳號的 Basic ID（@ 開頭），用來產生「加入好友」連結
+    oaBasicId: env.LINE_OA_BASIC_ID || '',
   },
 
   openai: {

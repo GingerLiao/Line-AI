@@ -10,9 +10,14 @@
 </head>
 <body>
   <header class="topbar">
-    <h1><span class="logo">💼</span>實習 Swipe・企業後台 <span class="muted small" id="crumb"></span></h1>
+    <h1><a href="/" class="home-link"><span class="logo">💼</span>實習 Swipe</a>・企業後台 <span class="muted small" id="crumb"></span></h1>
     <span class="me" id="me"></span>
+    <button class="btn" id="logout">登出</button>
   </header>
+  <div class="friend-banner hidden" id="friend-banner">
+    🔔 加入「實習 Swipe」官方帳號好友，才能在 LINE 收到新應徵通知。
+    <a class="btn primary" id="friend-link" target="_blank" rel="noopener">加入好友</a>
+  </div>
   <div class="layout">
     <aside class="side">
       <button class="btn primary block" id="new-job">＋ 刊登職缺</button>

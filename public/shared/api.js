@@ -14,7 +14,7 @@ export async function initAuth(side) {
     safeSet(key, userId);
     authHeaders = { 'X-Demo-User': userId };
     profile = { displayName: userId };
-    return { demo: true };
+    return { demo: true, cfg };
   }
 
   const liffId = side === 'company' ? cfg.liffIdCompany : cfg.liffIdStudent;
@@ -25,7 +25,24 @@ export async function initAuth(side) {
   }
   authHeaders = { Authorization: `Bearer ${liff.getIDToken()}` };
   profile = await liff.getProfile();
-  return { demo: false };
+  return { demo: false, cfg };
+}
+
+// 登出後回到網站首頁（示範模式只清掉假帳號）
+export function logout(side) {
+  safeSet(`demo-user-${side}`, '');
+  if (window.liff?.isLoggedIn?.()) liff.logout();
+  location.href = '/';
+}
+
+// 是否已加官方帳號好友（推播的前提）。無法判斷時回傳 null
+export async function isFriend() {
+  try {
+    const { friendFlag } = await liff.getFriendship();
+    return friendFlag;
+  } catch {
+    return null;
+  }
 }
 
 export async function api(path, { method = 'GET', body, form } = {}) {

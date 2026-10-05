@@ -349,15 +349,29 @@ ngrok 會給你一個 `https://xxxx.ngrok-free.app` 的網址：
 
 > ⏰ **排程注意**：`node-cron` 需要伺服器一直開著。免費方案閒置會休眠，提醒可能不會準時發送。Demo 前可以改用付費方案，或用 Cloud Scheduler 等外部排程定時呼叫一個觸發提醒的 API（參考 `server/index.js` 裡 `/api/dev/run-reminders` 的寫法，並加上密鑰保護）。
 
-### 8-2 圖文選單（Rich Menu）
+### 8-2 兩個入口：學生用圖文選單、企業用網站
 
-讓使用者一打開官方帳號就看到入口：
+| 對象 | 入口 | 登入方式 |
+| --- | --- | --- |
+| 學生 | 加入官方帳號 → 點圖文選單 | 在 LINE 裡打開，自動登入 |
+| 企業 | 網站首頁 `https://你的網址/`（企業介紹頁） → 「用 LINE 登入」 | LINE 帳號登入，並加官方帳號好友以收到應徵通知 |
 
-1. LINE Official Account Manager → **圖文選單** → 建立
-2. 版型選「兩格」或「三格」，動作設為 **連結**：
-   - 🃏 找實習 → `https://liff.line.me/學生端LIFF_ID`
-   - 🔖 我的收藏 → `https://liff.line.me/學生端LIFF_ID?tab=saved`
-   - 🏢 企業刊登 → `https://liff.line.me/企業端LIFF_ID`
+**學生的圖文選單**：LINE Official Account Manager → **圖文選單** → 建立
+
+1. 版型選 **小型 → 橫排三等分**，背景圖上傳 `docs/richmenu.png`（已做好，2500×843）
+2. 三格動作都選「連結」：
+   - A 滑卡找實習 → `https://liff.line.me/學生端LIFF_ID`
+   - B 收藏・投遞 → `https://liff.line.me/學生端LIFF_ID?tab=saved`
+   - C 我的履歷 → `https://liff.line.me/學生端LIFF_ID?tab=resumes`
+3. 「預設顯示」選顯示，儲存
+
+**企業的通知**：在 `.env` 填入官方帳號的 Basic ID（Official Account Manager 右上角帳號名稱下方，`@` 開頭）：
+
+```ini
+LINE_OA_BASIC_ID=@123abcde
+```
+
+企業後台會自動檢查是否已加好友，沒加就顯示「加入好友」提醒；網站首頁頁尾也會出現學生加好友連結。
 
 ---
 

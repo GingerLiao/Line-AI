@@ -1,10 +1,17 @@
-import { initAuth, api, profile, $, $$, esc, toast, splitList } from '/shared/api.js';
+import { initAuth, api, profile, logout, isFriend, $, $$, esc, toast, splitList } from '/shared/api.js';
 
 let jobs = [];
 let currentJobId = null;
 
-await initAuth('company');
+const { demo, cfg } = await initAuth('company');
 $('#me').textContent = (profile.displayName || '企').slice(0, 1);
+$('#logout').onclick = () => logout('company');
+
+// 做法 A：企業也要加官方帳號好友才收得到應徵通知，沒加就顯示提醒
+if (!demo && cfg.oaBasicId && (await isFriend()) === false) {
+  $('#friend-link').href = `https://line.me/R/ti/p/${encodeURIComponent(cfg.oaBasicId)}`;
+  $('#friend-banner').classList.remove('hidden');
+}
 $('#new-job').onclick = () => showJobForm();
 await loadJobs();
 

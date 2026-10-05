@@ -21,8 +21,11 @@ npm run seed     # 建立示範職缺、履歷、應徵者
 npm run dev      # 啟動 http://localhost:3000
 ```
 
+- 網站首頁（企業介紹頁）：<http://localhost:3000/>
 - 學生端：<http://localhost:3000/student/?as=demo-student>
-- 企業端：<http://localhost:3000/company/?as=demo-company>
+- 企業後台：<http://localhost:3000/company/?as=demo-company>
+
+正式上線後：**學生**加入官方帳號，從圖文選單進入；**企業**從網站首頁「用 LINE 登入」進入後台。
 
 沒有設定金鑰時會自動進入**示範模式**：用網址 `?as=` 假裝登入、AI 改用關鍵字規則、資料存在 `data/db.json`、推播訊息印在終端機。
 
