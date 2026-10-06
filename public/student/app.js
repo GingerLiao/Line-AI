@@ -365,7 +365,7 @@ function openResumeEditor(resume) {
       try {
         const parsed = await api('/student/resumes/parse', { method: 'POST', form: fd });
         fill({ title: `${parsed.department || ''}履歷`, ...parsed });
-        toast('AI 已自動填好，請確認或微調');
+        toast(parsed.aiFailed ? 'AI 目前忙碌，已先用基本方式填入，請確認欄位' : 'AI 已自動填好，請確認或微調');
       } catch (err) {
         toast(err.message);
       }

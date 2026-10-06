@@ -20,6 +20,8 @@ export const config = {
     model: env.OPENAI_MODEL || 'gpt-4o-mini',
     // 改用其他「OpenAI 相容」的服務（例如 Google Gemini 免費方案）時填它的網址；留空就是 OpenAI
     baseURL: env.OPENAI_BASE_URL || undefined,
+    // 主要模型忙碌或失敗時，依序改用的備用模型（逗號分隔）
+    fallbackModels: (env.OPENAI_FALLBACK_MODELS || '').split(',').map((m) => m.trim()).filter(Boolean),
   },
 
   firestoreEnabled: Boolean(env.GOOGLE_APPLICATION_CREDENTIALS),

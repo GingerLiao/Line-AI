@@ -60,8 +60,9 @@ companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
     const evaluation = evaluate(resume, job);
     // AI 摘要算一次就存起來，避免每次打開都花 API 費用
     if (!app.aiSummary) {
-      app.aiSummary = await summarizeApplicant(resume, job);
-      await db.update('applications', app.id, { aiSummary: app.aiSummary });
+      const { text, aiFailed } = await summarizeApplicant(resume, job);
+      app.aiSummary = text;
+      if (!aiFailed) await db.update('applications', app.id, { aiSummary: text }); // AI 失敗時不存，下次重試
     }
     return { ...app, resume, evaluation };
   }));

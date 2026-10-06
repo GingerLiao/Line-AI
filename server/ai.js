@@ -4,6 +4,7 @@
 //  - careerAdvice：AI 職涯健檢的「建議」
 //  - summarizeApplicant：企業後台的「AI 履歷摘要」
 // 沒有設定 OPENAI_API_KEY 時，會改用簡單的規則（關鍵字）版本，方便離線開發。
+// AI 呼叫失敗（模型忙碌、額度用完）時：先試備用模型，全部失敗再退回規則版，畫面不會壞掉。
 import OpenAI from 'openai';
 import { config } from './config.js';
 
@@ -13,17 +14,41 @@ const client = config.openai.apiKey
   : null;
 export const aiEnabled = Boolean(client);
 
+const models = [config.openai.model, ...config.openai.fallbackModels];
+
+// 依序嘗試主要模型與備用模型，全部失敗就丟出最後的錯誤
 async function askJson(system, user) {
-  const res = await client.chat.completions.create({
-    model: config.openai.model,
-    response_format: { type: 'json_object' },
-    temperature: 0.2,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user },
-    ],
-  });
-  return JSON.parse(res.choices[0].message.content);
+  let lastErr;
+  for (const model of models) {
+    try {
+      const res = await client.chat.completions.create({
+        model,
+        response_format: { type: 'json_object' },
+        temperature: 0.2,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+      });
+      // 有些模型會把 JSON 包在 ```json ... ``` 裡，先拿掉
+      const content = res.choices[0].message.content.trim().replace(/^```(?:json)?\s*|\s*```$/g, '');
+      return JSON.parse(content);
+    } catch (err) {
+      lastErr = err;
+      console.error(`[ai] ${model} 失敗：${err.status || ''} ${err.message}`);
+    }
+  }
+  throw lastErr;
+}
+
+// 有 AI 就用 AI；AI 全部失敗就改用規則版，並標記 aiFailed 讓畫面提示使用者
+async function tryAi(aiFn, fallbackFn) {
+  if (!client) return { value: fallbackFn(), aiFailed: false };
+  try {
+    return { value: await aiFn(), aiFailed: false };
+  } catch {
+    return { value: fallbackFn(), aiFailed: true };
+  }
 }
 
 // ---------------- 履歷 ----------------
@@ -43,11 +68,11 @@ const RESUME_SCHEMA = `{
 }`;
 
 export async function parseResume(text) {
-  if (!client) return fallbackParseResume(text);
-  return askJson(
-    `你是履歷解析器。把使用者的履歷整理成以下 JSON 格式，找不到的欄位留空字串或空陣列，不要捏造：\n${RESUME_SCHEMA}`,
-    text,
+  const { value, aiFailed } = await tryAi(
+    () => askJson(`你是履歷解析器。把使用者的履歷整理成以下 JSON 格式，找不到的欄位留空字串或空陣列，不要捏造：\n${RESUME_SCHEMA}`, text),
+    () => fallbackParseResume(text),
   );
+  return { ...value, aiFailed };
 }
 
 // ---------------- 職缺 ----------------
@@ -76,17 +101,21 @@ const JOB_SCHEMA = `{
 }`;
 
 export async function parseJob(text) {
-  if (!client) return fallbackParseJob(text);
-  return askJson(
-    `你是職缺解析器。今天是 ${new Date().toISOString().slice(0, 10)}。把職缺說明整理成以下 JSON 格式，找不到的欄位留空，不要捏造：\n${JOB_SCHEMA}`,
-    text,
+  const { value, aiFailed } = await tryAi(
+    () => askJson(`你是職缺解析器。今天是 ${new Date().toISOString().slice(0, 10)}。把職缺說明整理成以下 JSON 格式，找不到的欄位留空，不要捏造：\n${JOB_SCHEMA}`, text),
+    () => fallbackParseJob(text),
   );
+  return { ...value, aiFailed };
 }
 
 // ---------------- AI 職涯健檢 ----------------
 // evaluation 由 matching.evaluate() 算好，AI 只負責把結果寫成可執行的建議
 export async function careerAdvice(resume, job, evaluation) {
-  if (!client) return fallbackAdvice(resume, job, evaluation);
+  const { value } = await tryAi(() => aiCareerAdvice(resume, job, evaluation), () => fallbackAdvice(resume, job, evaluation));
+  return value;
+}
+
+async function aiCareerAdvice(resume, job, evaluation) {
   const out = await askJson(
     `你是給大學生的職涯顧問。根據履歷與職缺的比對結果，用繁體中文給出：
 {
@@ -105,13 +134,16 @@ export async function careerAdvice(resume, job, evaluation) {
 }
 
 // ---------------- 企業端：AI 履歷摘要 ----------------
+// 回傳 { text, aiFailed }；aiFailed 時是規則版摘要，呼叫端不要存起來，下次再讓 AI 重試
 export async function summarizeApplicant(resume, job) {
-  if (!client) return fallbackSummary(resume);
-  const out = await askJson(
-    '你是招募助理。用繁體中文、60 字以內，摘要這位應徵者與此職缺最相關的重點（技能、經歷、可上班天數）。輸出 {"summary": "..."}',
-    JSON.stringify({ resume, job }),
-  );
-  return out.summary;
+  const { value, aiFailed } = await tryAi(async () => {
+    const out = await askJson(
+      '你是招募助理。用繁體中文、60 字以內，摘要這位應徵者與此職缺最相關的重點（技能、經歷、可上班天數）。輸出 {"summary": "..."}',
+      JSON.stringify({ resume, job }),
+    );
+    return out.summary;
+  }, () => fallbackSummary(resume));
+  return { text: value, aiFailed };
 }
 
 // =====================================================================

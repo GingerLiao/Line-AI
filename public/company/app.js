@@ -62,7 +62,11 @@ function showJobForm(job) {
     e.target.disabled = true;
     e.target.innerHTML = '<span class="spinner"></span> AI 解析中…';
     try {
-      fillJobForm(await api('/company/jobs/parse', { method: 'POST', form: fd }));
+      const parsed = await api('/company/jobs/parse', { method: 'POST', form: fd });
+      fillJobForm(parsed);
+      $('#ai-note').textContent = parsed.aiFailed
+        ? '⚠️ AI 目前忙碌，已先用基本方式填入，請仔細確認欄位（或稍後再按一次）'
+        : '⚡ AI 已自動填好，請確認或微調';
       $('#ai-note').classList.remove('hidden');
     } catch (err) {
       toast(err.message);
