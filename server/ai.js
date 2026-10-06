@@ -8,7 +8,8 @@ import OpenAI from 'openai';
 import { config } from './config.js';
 
 const client = config.openai.apiKey
-  ? new OpenAI({ apiKey: config.openai.apiKey, baseURL: config.openai.baseURL })
+  // 最多等 30 秒、失敗重試 1 次，避免 AI 服務出問題時畫面一直轉圈
+  ? new OpenAI({ apiKey: config.openai.apiKey, baseURL: config.openai.baseURL, timeout: 30_000, maxRetries: 1 })
   : null;
 export const aiEnabled = Boolean(client);
 
