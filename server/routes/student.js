@@ -56,7 +56,8 @@ studentRouter.get('/cards', async (req, res) => {
   const me = req.user.userId;
   const prefs = (await db.get('preferences', me)) || {};
   const swipes = await db.find('swipes', { studentId: me });
-  const swiped = new Set(swipes.map((s) => s.jobId));
+  // 滑過的不再出現；但「再看一次」放回來的跳過紀錄（restored）不算
+  const swiped = new Set(swipes.filter((s) => !s.restored).map((s) => s.jobId));
   const allJobs = await db.find('jobs');
   const candidates = allJobs.filter((j) => j.status === 'open' && !swiped.has(j.id) && passesFilters(j, prefs));
 
@@ -70,6 +71,26 @@ studentRouter.get('/cards', async (req, res) => {
     model: embeddingModel,
   });
   res.json(ranked.map(stripEmbedding));
+});
+
+// 「再看一次跳過的職缺」：目前有幾個可以放回來
+const skippedOf = async (me) => {
+  const swipes = await db.find('swipes', { studentId: me });
+  // 同一個職缺後來有收藏／投遞或再次跳過，以最新一筆為準
+  const latest = new Map();
+  for (const s of swipes.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))) latest.set(s.jobId, s);
+  return [...latest.values()].filter((s) => s.action === 'skip' && !s.restored);
+};
+
+studentRouter.get('/swipes/skipped', async (req, res) => {
+  res.json({ count: (await skippedOf(req.user.userId)).length });
+});
+
+// 把跳過的職缺放回卡池（保留紀錄給行為學習用，只標記 restored）
+studentRouter.post('/swipes/restore-skipped', async (req, res) => {
+  const skipped = await skippedOf(req.user.userId);
+  await Promise.all(skipped.map((s) => db.update('swipes', s.id, { restored: true })));
+  res.json({ restored: skipped.length });
 });
 
 // 符合條件的數量（篩選面板上的「查看 N 個符合職缺」）

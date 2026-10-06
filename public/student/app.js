@@ -60,12 +60,30 @@ function renderDeck() {
   const [top, next] = state.cards;
   $('#actions').classList.toggle('hidden', !top);
   if (!top) {
-    deck.innerHTML = `<div class="empty">目前沒有符合條件的新職缺 🙌<br><br><button class="btn" id="empty-filter">調整篩選條件</button></div>`;
+    deck.innerHTML = `<div class="empty">目前沒有符合條件的新職缺 🙌<br><br>
+      <button class="btn primary hidden" id="empty-restore"></button>
+      <button class="btn" id="empty-filter">調整篩選條件</button></div>`;
     $('#empty-filter').onclick = openFilter;
+    showRestoreButton();
     return;
   }
   deck.innerHTML = (next ? cardHtml(next, 'behind') : '') + cardHtml(top, 'top');
   bindSwipe($('.card.top', deck), top);
+}
+
+// 滑完後：如果有跳過的職缺，提供「再看一次」
+async function showRestoreButton() {
+  const { count } = await api('/student/swipes/skipped').catch(() => ({ count: 0 }));
+  const btn = $('#empty-restore');
+  if (!btn || !count) return;
+  btn.textContent = `↺ 再看一次跳過的 ${count} 個職缺`;
+  btn.classList.remove('hidden');
+  btn.onclick = async () => {
+    btn.disabled = true;
+    await api('/student/swipes/restore-skipped', { method: 'POST' });
+    toast('已把跳過的職缺放回來');
+    loadCards();
+  };
 }
 
 function cardHtml(job, cls) {
