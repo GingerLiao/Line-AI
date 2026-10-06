@@ -6,6 +6,9 @@ import { parseResume, careerAdvice } from '../ai.js';
 import { fileToText } from '../extract.js';
 import { evaluate, passesFilters } from '../matching.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
+import { rankJobs } from '../ranking.js';
+import { embeddingModel } from '../ai.js';
+import { withEmbedding, stripEmbedding } from '../embeddings.js';
 
 const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } });
 export const studentRouter = Router();
@@ -17,7 +20,7 @@ const ownResume = async (req, id) => {
 
 // ---------- 履歷 ----------
 studentRouter.get('/resumes', async (req, res) => {
-  res.json(await db.find('resumes', { ownerId: req.user.userId }));
+  res.json((await db.find('resumes', { ownerId: req.user.userId })).map(stripEmbedding));
 });
 
 // AI 智慧建立履歷：上傳檔案或貼上文字 → 回傳結構化草稿（不存檔，讓學生確認後再存）
@@ -29,12 +32,14 @@ studentRouter.post('/resumes/parse', upload.single('file'), async (req, res) => 
 
 studentRouter.post('/resumes', async (req, res) => {
   const { id, ...data } = req.body;
-  const row = { ...data, ownerId: req.user.userId, updatedAt: new Date().toISOString() };
+  const { embedding, ...clean } = data;
+  // 存檔時順便算語意向量，給滑卡排序用
+  const row = await withEmbedding({ ...clean, ownerId: req.user.userId, updatedAt: new Date().toISOString() }, 'resume');
   if (id) {
     if (!(await ownResume(req, id))) return res.status(404).json({ error: '找不到履歷' });
-    return res.json(await db.set('resumes', id, row));
+    return res.json(stripEmbedding(await db.set('resumes', id, row)));
   }
-  res.json(await db.add('resumes', row));
+  res.json(stripEmbedding(await db.add('resumes', row)));
 });
 
 // ---------- 求職條件 ----------
@@ -50,19 +55,21 @@ studentRouter.put('/preferences', async (req, res) => {
 studentRouter.get('/cards', async (req, res) => {
   const me = req.user.userId;
   const prefs = (await db.get('preferences', me)) || {};
-  const swiped = new Set((await db.find('swipes', { studentId: me })).map((s) => s.jobId));
-  let jobs = (await db.find('jobs', { status: 'open' })).filter((j) => !swiped.has(j.id) && passesFilters(j, prefs));
+  const swipes = await db.find('swipes', { studentId: me });
+  const swiped = new Set(swipes.map((s) => s.jobId));
+  const allJobs = await db.find('jobs');
+  const candidates = allJobs.filter((j) => j.status === 'open' && !swiped.has(j.id) && passesFilters(j, prefs));
 
-  // 「根據我的履歷智慧排序」：先篩掉硬條件，再依符合度排前面
+  // 先篩掉硬條件（上面），再依「規則 + AI 語意 + 滑卡偏好 + 時效」排序（server/ranking.js）
   const resume = prefs.smartSort && prefs.resumeId ? await ownResume(req, prefs.resumeId) : null;
-  if (resume) {
-    jobs = jobs
-      .map((j) => ({ ...j, match: evaluate(resume, j) }))
-      .sort((a, b) => b.match.score - a.match.score);
-  } else {
-    jobs.sort((a, b) => (a.deadline || '9999').localeCompare(b.deadline || '9999'));
-  }
-  res.json(jobs);
+  const ranked = rankJobs({
+    jobs: candidates,
+    resume,
+    swipes,
+    allJobsById: new Map(allJobs.map((j) => [j.id, j])),
+    model: embeddingModel,
+  });
+  res.json(ranked.map(stripEmbedding));
 });
 
 // 符合條件的數量（篩選面板上的「查看 N 個符合職缺」）
@@ -120,7 +127,7 @@ studentRouter.get('/saved', async (req, res) => {
   const apps = await db.find('applications', { studentId: me });
   const rows = await Promise.all(swipes.map(async (s) => ({
     ...s,
-    job: await db.get('jobs', s.jobId),
+    job: stripEmbedding(await db.get('jobs', s.jobId)),
     status: apps.find((a) => a.jobId === s.jobId)?.status,
   })));
   res.json(rows.filter((r) => r.job));

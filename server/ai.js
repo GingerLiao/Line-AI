@@ -146,6 +146,41 @@ export async function summarizeApplicant(resume, job) {
   return { text: value, aiFailed };
 }
 
+// ---------------- 語意向量（滑卡排序用）----------------
+// 回傳 { model, vector }。有設定 AI 就用 AI 的 embedding 模型；
+// 沒有設定時用本機的「關鍵字向量」，效果較差但可以離線跑。AI 失敗回傳 null（之後可用 npm run embed 補算）。
+export const embeddingModel = client && config.openai.embeddingModel ? config.openai.embeddingModel : 'local-hash-v1';
+
+export async function embedText(text) {
+  if (embeddingModel === 'local-hash-v1') return { model: embeddingModel, vector: localEmbed(text) };
+  try {
+    const res = await client.embeddings.create({ model: embeddingModel, input: text.slice(0, 8000) });
+    const vector = res.data[0].embedding.map((x) => Math.round(x * 1e5) / 1e5); // 縮短小數，省資料庫空間
+    return { model: embeddingModel, vector };
+  } catch (err) {
+    console.error(`[ai] embedding ${embeddingModel} 失敗：${err.status || ''} ${err.message}`);
+    return null;
+  }
+}
+
+// 本機版：英文字詞 + 中文兩字詞，雜湊到 512 維
+function localEmbed(text) {
+  const dim = 512;
+  const v = new Array(dim).fill(0);
+  const s = String(text).toLowerCase();
+  const tokens = [...(s.match(/[a-z0-9+#.]+/g) || [])];
+  for (const run of s.match(/[\u4e00-\u9fff]+/g) || []) {
+    for (let i = 0; i < run.length - 1; i++) tokens.push(run.slice(i, i + 2));
+  }
+  for (const t of tokens) {
+    let h = 2166136261;
+    for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619);
+    v[(h >>> 0) % dim] += 1;
+  }
+  const norm = Math.hypot(...v) || 1;
+  return v.map((x) => Math.round((x / norm) * 1e5) / 1e5);
+}
+
 // =====================================================================
 // 以下是沒有 OpenAI 金鑰時的「規則版」，只求可以跑，不求聰明
 // =====================================================================

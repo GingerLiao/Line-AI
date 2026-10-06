@@ -162,6 +162,17 @@ Line-AI/
 | 企業按「邀請面試」 | 學生 | `routes/company.js` → `/applications/:id/status` |
 | 收藏的職缺快截止 | 學生 | `reminder.js` → `sendDeadlineReminders()` |
 
+**④ 滑卡排序 = 規則 + AI 語意 + 行為學習 + 時效**（`server/ranking.js`）
+
+| 分數 | 怎麼算 | 權重（剛開始 → 滑超過 20 張） |
+| --- | --- | --- |
+| 規則 | `matching.js` 逐項比對學歷、年級、技能 | 50% → 45% |
+| AI 語意 | 履歷與職缺的語意向量（Embeddings）有多接近，存檔時算一次 | 40% → 25% |
+| 行為學習 | 右滑 +1、收藏 +0.7、跳過 −0.3，算出「偏好方向」 | 0% → 20% |
+| 時效 | 快截止、一週內刊登 | 10% |
+
+每 5 張卡穿插 1 張「🔍 換個口味」的探索職缺，避免只推同一類。測試：`test/ranking.test.js`。
+
 ### 🛠 練習（建議自己動手改改看）
 
 1. 把截止提醒改成「前 1 天」：修改 `.env` 的 `REMINDER_DAYS_BEFORE=1`
@@ -200,6 +211,11 @@ const res = await client.chat.completions.create({
 ```
 
 **寫 Prompt 的訣竅**：在 system 裡直接貼出你要的 JSON 格式（看 `RESUME_SCHEMA`、`JOB_SCHEMA`），並說「找不到的欄位留空，不要捏造」。
+
+### 語意向量（滑卡排序用）
+
+使用 OpenAI 時不用另外設定；使用 Gemini 時要在 `.env`／Render 加上 `OPENAI_EMBEDDING_MODEL`（Gemini 的 embedding 模型名稱）。
+開啟或更換模型後，執行一次 `npm run embed` 幫既有的履歷和職缺補算向量。
 
 ### ✅ 檢查點
 

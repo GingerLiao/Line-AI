@@ -7,7 +7,8 @@
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
     "seed": "node server/seed.js",
-    "test": "node --test"
+    "test": "node --test",
+    "embed": "node server/embed.js"
   },
   "repository": {
     "type": "git",

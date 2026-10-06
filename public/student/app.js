@@ -78,6 +78,7 @@ function cardHtml(job, cls) {
       <div class="avatar">${esc(job.companyName.slice(0, 2))}</div>
       <div><h3>${esc(job.companyName.replace(/(股份)?有限公司$/, ''))}</h3><span class="tag">${esc(job.category)}・實習</span></div>
     </div>
+    ${job.explore || job.reasons?.length ? `<div class="chips reasons">${job.explore ? '<span class="tag explore">🔍 換個口味</span>' : ''}${(job.reasons || []).map((r) => `<span class="tag ${r === '即將截止' ? 'bad' : ''}">${esc(r)}</span>`).join('')}</div>` : ''}
     <p class="desc">${esc(job.description)}</p>
     <div class="facts">
       <div>💲 時薪 ${esc(job.wage)} 元</div>

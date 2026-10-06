@@ -21,6 +21,8 @@ export const config = {
     // 改用其他「OpenAI 相容」的服務（例如 Google Gemini 免費方案）時填它的網址；留空就是 OpenAI
     baseURL: env.OPENAI_BASE_URL || undefined,
     // 主要模型忙碌或失敗時，依序改用的備用模型（逗號分隔）
+    // 語意向量（Embeddings）模型：OpenAI 預設 text-embedding-3-small；用 Gemini 時要另外設定
+    embeddingModel: env.OPENAI_EMBEDDING_MODEL || (env.OPENAI_BASE_URL ? '' : 'text-embedding-3-small'),
     fallbackModels: (env.OPENAI_FALLBACK_MODELS || '').split(',').map((m) => m.trim()).filter(Boolean),
   },
 

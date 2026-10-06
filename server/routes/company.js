@@ -6,6 +6,7 @@ import { parseJob, summarizeApplicant } from '../ai.js';
 import { fileToText } from '../extract.js';
 import { evaluate } from '../matching.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
+import { withEmbedding, stripEmbedding } from '../embeddings.js';
 
 const upload = multer({ limits: { fileSize: 5 * 1024 * 1024 } });
 export const companyRouter = Router();
@@ -19,7 +20,7 @@ const ownJob = async (req, id) => {
 companyRouter.get('/jobs', async (req, res) => {
   const jobs = await db.find('jobs', { companyId: req.user.userId });
   const apps = await db.find('applications', { companyId: req.user.userId });
-  res.json(jobs.map((j) => ({ ...j, applicantCount: apps.filter((a) => a.jobId === j.id).length })));
+  res.json(jobs.map((j) => ({ ...stripEmbedding(j), applicantCount: apps.filter((a) => a.jobId === j.id).length })));
 });
 
 // 上傳檔案智慧建檔：AI 把職缺說明拆成結構化欄位，回傳草稿讓企業確認／微調
@@ -31,8 +32,8 @@ companyRouter.post('/jobs/parse', upload.single('file'), async (req, res) => {
 
 // 確認送出，開始媒合：職缺進入卡池
 companyRouter.post('/jobs', async (req, res) => {
-  const { id, applicantCount, ...data } = req.body;
-  const row = {
+  const { id, applicantCount, embedding, createdAt, aiFailed, ...data } = req.body;
+  let row = {
     ...data,
     wage: Number(data.wage) || 0,
     daysPerWeek: Number(data.daysPerWeek) || 0,
@@ -41,11 +42,13 @@ companyRouter.post('/jobs', async (req, res) => {
     status: data.status || 'open',
     updatedAt: new Date().toISOString(),
   };
+  row = await withEmbedding(row, 'job'); // 算語意向量，給學生端滑卡排序用
   if (id) {
-    if (!(await ownJob(req, id))) return res.status(404).json({ error: '找不到職缺' });
-    return res.json(await db.set('jobs', id, row));
+    const old = await ownJob(req, id);
+    if (!old) return res.status(404).json({ error: '找不到職缺' });
+    return res.json(stripEmbedding(await db.set('jobs', id, { ...row, createdAt: old.createdAt || row.updatedAt })));
   }
-  res.json(await db.add('jobs', { ...row, createdAt: row.updatedAt }));
+  res.json(stripEmbedding(await db.add('jobs', { ...row, createdAt: row.updatedAt })));
 });
 
 // ---------- 應徵者（後台篩選）----------
@@ -64,7 +67,7 @@ companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
       app.aiSummary = text;
       if (!aiFailed) await db.update('applications', app.id, { aiSummary: text }); // AI 失敗時不存，下次重試
     }
-    return { ...app, resume, evaluation };
+    return { ...app, resume: stripEmbedding(resume), evaluation };
   }));
   res.json(rows.filter(Boolean).sort((a, b) => b.evaluation.score - a.evaluation.score));
 });
