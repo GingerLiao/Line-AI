@@ -18,6 +18,8 @@ export const config = {
   openai: {
     apiKey: env.OPENAI_API_KEY || '',
     model: env.OPENAI_MODEL || 'gpt-4o-mini',
+    // 改用其他「OpenAI 相容」的服務（例如 Google Gemini 免費方案）時填它的網址；留空就是 OpenAI
+    baseURL: env.OPENAI_BASE_URL || undefined,
   },
 
   firestoreEnabled: Boolean(env.GOOGLE_APPLICATION_CREDENTIALS),

@@ -7,7 +7,9 @@
 import OpenAI from 'openai';
 import { config } from './config.js';
 
-const client = config.openai.apiKey ? new OpenAI({ apiKey: config.openai.apiKey }) : null;
+const client = config.openai.apiKey
+  ? new OpenAI({ apiKey: config.openai.apiKey, baseURL: config.openai.baseURL })
+  : null;
 export const aiEnabled = Boolean(client);
 
 async function askJson(system, user) {
