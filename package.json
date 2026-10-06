@@ -8,7 +8,8 @@
     "dev": "node --watch server/index.js",
     "seed": "node server/seed.js",
     "test": "node --test",
-    "embed": "node server/embed.js"
+    "embed": "node server/embed.js",
+    "models": "node server/list-models.js"
   },
   "repository": {
     "type": "git",
