@@ -73,9 +73,10 @@ companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
   const apps = await db.find('applications', { jobId: job.id });
 
   const rows = await Promise.all(apps.map(async (app) => {
-    const resume = await db.get('resumes', app.resumeId);
+    const resume = (await db.get('resumes', app.resumeId)) || app.resumeSnapshot; // 學生刪掉履歷時用投遞當下的副本
     if (!resume) return null;
-    return { ...app, resume: withFileUrls(stripEmbedding(resume)), evaluation: evaluate(resume, job) };
+    const { resumeSnapshot, ...rest } = app;
+    return { ...rest, resume: withFileUrls(stripEmbedding(resume)), evaluation: evaluate(resume, job) };
   }));
   res.json(rows.filter(Boolean).sort((a, b) => b.evaluation.score - a.evaluation.score));
 });
@@ -85,7 +86,8 @@ companyRouter.post('/applications/:id/summary', async (req, res) => {
   const app = await ownApplication(req);
   if (!app) return res.status(404).json({ error: '找不到應徵紀錄' });
   if (app.aiSummary) return res.json({ summary: app.aiSummary });
-  const [resume, job] = await Promise.all([db.get('resumes', app.resumeId), db.get('jobs', app.jobId)]);
+  const [found, job] = await Promise.all([db.get('resumes', app.resumeId), db.get('jobs', app.jobId)]);
+  const resume = found || app.resumeSnapshot;
   if (!resume || !job) return res.status(404).json({ error: '找不到履歷或職缺' });
   const { text, aiFailed } = await summarizeApplicant(resume, job);
   if (!aiFailed) await db.update('applications', app.id, { aiSummary: text }); // AI 失敗時不存，下次重試

@@ -1,6 +1,6 @@
 import {
   initAuth, api, $, $$, esc, toast, daysLeft, mmdd, splitList,
-  gradeLabel, GRADE_OPTIONS, fitGrade, GRADUATED, aiWaiting, prepareUpload, UPLOAD_ACCEPT,
+  gradeLabel, GRADE_OPTIONS, fitGrade, GRADUATED, aiWaiting, prepareUpload, confirmDialog, UPLOAD_ACCEPT,
 } from '/shared/api.js';
 import { CITIES, DISTRICTS, REMOTE, placeLabel, parseAddress } from '/shared/taiwan.js';
 
@@ -619,7 +619,8 @@ function openResumeEditor(resume) {
         </div>
         <label class="field"><span>個人作品集／GitHub（選填，一行一個）</span><textarea class="input" name="links" style="min-height:50px">${esc((r.links || []).join('\n'))}</textarea></label>
       </div>
-      <button class="btn primary block" id="r-save">儲存履歷</button>`;
+      <button class="btn primary block" id="r-save">儲存履歷</button>
+      ${resume ? '<button type="button" class="btn block danger-outline" id="r-delete" style="margin-top:10px">🗑 刪除這份履歷</button>' : ''}`;
 
     // 年級選項跟著學歷變（大學：大一～大四；碩士：碩一～碩三…）
     const gradeSel = form.grade;
@@ -658,6 +659,27 @@ function openResumeEditor(resume) {
       stop();
     };
   }
+
+  // 刪除履歷（已投遞的企業仍會保留投遞當下的副本）
+  form.addEventListener('click', async (e) => {
+    if (e.target.id !== 'r-delete') return;
+    const yes = await confirmDialog({
+      title: `刪除「${resume.title}」？`,
+      message: '刪除後無法復原。已經用這份履歷投遞的企業，仍然看得到投遞當下的內容。',
+      ok: '刪除', danger: true,
+    });
+    if (!yes) return;
+    try {
+      await api(`/student/resumes/${resume.id}`, { method: 'DELETE' });
+      state.resumes = state.resumes.filter((r) => r.id !== resume.id);
+      if (state.prefs.resumeId === resume.id) state.prefs.resumeId = null;
+      closeSheet();
+      renderResumes();
+      toast('履歷已刪除');
+    } catch (err) {
+      toast(err.message);
+    }
+  });
 
   form.onsubmit = async (e) => {
     e.preventDefault();
@@ -728,7 +750,10 @@ async function loadSaved() {
       <div class="item tappable" data-open="${esc(r.id)}"><div class="item-row">
         <div class="avatar">${esc(r.job.companyName.slice(0, 2))}</div>
         <div class="grow"><h4>${esc(r.job.title)}</h4><div class="muted small">${esc(r.job.companyName)}・截止 ${mmdd(r.job.deadline)}</div><div style="margin-top:6px">${statusTag(r)}</div></div>
-        ${canApply(r) ? `<button class="btn primary" data-apply="${esc(r.id)}">投遞</button>` : '<span class="chev">›</span>'}
+        ${r.action === 'save' ? `<div class="row-acts">
+          ${canApply(r) ? `<button class="btn primary" data-apply="${esc(r.id)}">投遞</button>` : ''}
+          <button class="link-btn muted-link" data-unsave="${esc(r.id)}">取消收藏</button>
+        </div>` : '<span class="chev">›</span>'}
       </div>${r.status === 'interview' ? interviewHtml(r.interview) : ''}</div>`).join('');
 
   const applyFromSaved = async (row) => {
@@ -742,6 +767,20 @@ async function loadSaved() {
       toast(err.message);
     }
   };
+  // 取消收藏：職缺會回到滑卡的卡池
+  const unsave = async (row) => {
+    try {
+      await api(`/student/saved/${row.id}`, { method: 'DELETE' });
+      toast('已取消收藏，之後滑卡還會再看到這個職缺');
+      loadSaved();
+    } catch (err) {
+      toast(err.message);
+    }
+  };
+  $$('[data-unsave]', list).forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    unsave(rows.find((r) => r.id === b.dataset.unsave));
+  }));
   $$('[data-apply]', list).forEach((b) => (b.onclick = (e) => {
     e.stopPropagation();
     applyFromSaved(rows.find((r) => r.id === b.dataset.apply));
@@ -751,10 +790,13 @@ async function loadSaved() {
     const row = rows.find((r) => r.id === el.dataset.open);
     const body = openJobDetail(row.job, {
       statusHtml: `<div style="margin-bottom:12px">${statusTag(row)}</div>${row.status === 'interview' ? interviewHtml(row.interview) : ''}`,
-      actionHtml: canApply(row) ? '<button class="btn primary block" id="detail-apply">➤ 投遞這個職缺</button>' : '',
+      actionHtml: (canApply(row) ? '<button class="btn primary block" id="detail-apply">➤ 投遞這個職缺</button>' : '')
+        + (row.action === 'save' ? '<button class="btn block" id="detail-unsave">🔕 取消收藏</button>' : ''),
     });
     const btn = $('#detail-apply', body);
     if (btn) btn.onclick = () => { closeSheet(); applyFromSaved(row); };
+    const un = $('#detail-unsave', body);
+    if (un) un.onclick = () => { closeSheet(); unsave(row); };
   }));
   // 從 LINE 推播（例如面試邀請）點進來：自動打開那個職缺
   if (openJobId) {

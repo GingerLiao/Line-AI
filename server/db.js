@@ -6,6 +6,7 @@
 //   add(col, data)          新增（自動產生 id）
 //   set(col, id, data)      以指定 id 寫入（覆蓋）
 //   update(col, id, patch)  部分更新
+//   remove(col, id)         刪除一筆
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -66,6 +67,10 @@ function createFirestoreDb() {
         touch(col);
         return this.get(col, id);
       },
+      async remove(col, id) {
+        await store.collection(col).doc(id).delete();
+        touch(col);
+      },
     };
   });
 }
@@ -108,6 +113,10 @@ function createJsonDb() {
       Object.assign(table(col)[id], patch);
       save();
       return { id, ...table(col)[id] };
+    },
+    async remove(col, id) {
+      delete table(col)[id];
+      save();
     },
   };
 }

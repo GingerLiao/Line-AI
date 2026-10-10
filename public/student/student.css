@@ -137,3 +137,6 @@ input[type=range] { width: 100%; accent-color: var(--green); }
 .timeline li::before { content: ''; position: absolute; left: 3px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
 .timeline li:not(:last-child)::after { content: ''; position: absolute; left: 7px; top: 18px; bottom: 0; width: 2px; background: #cdeedb; }
 .timeline .mode { display: inline-block; font-size: 12px; background: var(--bg); border-radius: 6px; padding: 1px 6px; margin-left: 4px; font-weight: 500; }
+.row-acts { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.muted-link { color: var(--muted); font-weight: 500; font-size: 12px; }
+.btn.danger-outline { color: var(--red); border-color: #f5c2c3; background: #fff; }

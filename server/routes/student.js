@@ -43,6 +43,19 @@ studentRouter.post('/resumes', async (req, res) => {
   res.json(withFileUrls(stripEmbedding(await db.add('resumes', row))));
 });
 
+// 刪除履歷：已經用這份履歷投遞的應徵紀錄，先存一份副本，企業端仍然看得到當時的履歷
+studentRouter.delete('/resumes/:id', async (req, res) => {
+  const resume = await ownResume(req, req.params.id);
+  if (!resume) return res.status(404).json({ error: '找不到履歷' });
+  const apps = await db.find('applications', { resumeId: resume.id });
+  await Promise.all(apps.map((a) => db.update('applications', a.id, { resumeSnapshot: stripEmbedding(resume) })));
+  await db.remove('resumes', resume.id);
+  // 篩選條件裡選的「依據履歷」如果是這份，就清掉
+  const prefs = await db.get('preferences', req.user.userId);
+  if (prefs?.resumeId === resume.id) await db.update('preferences', req.user.userId, { resumeId: null });
+  res.json({ ok: true });
+});
+
 // ---------- 求職條件 ----------
 studentRouter.get('/preferences', async (req, res) => {
   res.json((await db.get('preferences', req.user.userId)) || {});
@@ -165,6 +178,15 @@ studentRouter.get('/saved', async (req, res) => {
     return { ...s, job: stripEmbedding(await db.get('jobs', s.jobId)), status: app?.status, interview: app?.interview };
   }));
   res.json(rows.filter((r) => r.job));
+});
+
+// 取消收藏：刪掉收藏紀錄，職缺會回到滑卡的卡池（已投遞的不能取消）
+studentRouter.delete('/saved/:swipeId', async (req, res) => {
+  const swipe = await db.get('swipes', req.params.swipeId);
+  if (!swipe || swipe.studentId !== req.user.userId) return res.status(404).json({ error: '找不到收藏' });
+  if (swipe.action !== 'save') return res.status(400).json({ error: '已投遞的職缺不能取消收藏' });
+  await db.remove('swipes', swipe.id);
+  res.json({ ok: true });
 });
 
 // 從收藏中投遞
