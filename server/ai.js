@@ -16,7 +16,21 @@ export const aiEnabled = Boolean(client);
 
 const models = [config.openai.model, ...config.openai.fallbackModels];
 
+// 送給 AI 前拿掉語意向量（幾千個數字），否則提示詞很長、回應變慢甚至逾時
+const lean = (row) => {
+  if (!row) return row;
+  const { embedding, ownerId, companyId, studentId, ...rest } = row;
+  return rest;
+};
+
+// 照片（data URI）轉成 AI 看得懂的「文字 + 圖片」訊息
+const withImage = (prompt, image) => [
+  { type: 'text', text: prompt },
+  { type: 'image_url', image_url: { url: image } },
+];
+
 // 依序嘗試主要模型與備用模型，全部失敗就丟出最後的錯誤
+// user 可以是文字，或 withImage() 產生的「文字 + 圖片」
 async function askJson(system, user) {
   let lastErr;
   for (const model of models) {
@@ -67,12 +81,16 @@ const RESUME_SCHEMA = `{
   "contact": {"email": "", "phone": "", "lineId": ""}
 }`;
 
-export async function parseResume(text) {
+// input：{ text } 或 { image: 'data:image/jpeg;base64,...' }（拍照上傳的履歷）
+export async function parseResume({ text = '', image } = {}) {
   const { value, aiFailed } = await tryAi(
-    () => askJson(`你是履歷解析器。把使用者的履歷整理成以下 JSON 格式，找不到的欄位留空字串或空陣列，不要捏造：\n${RESUME_SCHEMA}`, text),
+    () => askJson(
+      `你是履歷解析器。把使用者的履歷整理成以下 JSON 格式，找不到的欄位留空字串或空陣列，不要捏造：\n${RESUME_SCHEMA}`,
+      image ? withImage('這是一份履歷的照片，請讀出內容後解析。', image) : text,
+    ),
     () => fallbackParseResume(text),
   );
-  return { ...value, aiFailed };
+  return { ...value, aiFailed: aiFailed || Boolean(image && !client) };
 }
 
 // ---------------- 職缺 ----------------
@@ -100,19 +118,31 @@ const JOB_SCHEMA = `{
   "benefits": ["公司福利短詞"]
 }`;
 
-export async function parseJob(text) {
+// input：{ text } 或 { image }（徵才海報、職缺說明的照片）
+export async function parseJob({ text = '', image } = {}) {
   const { value, aiFailed } = await tryAi(
-    () => askJson(`你是職缺解析器。今天是 ${new Date().toISOString().slice(0, 10)}。把職缺說明整理成以下 JSON 格式，找不到的欄位留空，不要捏造：\n${JOB_SCHEMA}`, text),
+    () => askJson(
+      `你是職缺解析器。今天是 ${new Date().toISOString().slice(0, 10)}。把職缺說明整理成以下 JSON 格式，找不到的欄位留空，不要捏造：\n${JOB_SCHEMA}`,
+      image ? withImage('這是一張職缺說明的照片，請讀出內容後解析。', image) : text,
+    ),
     () => fallbackParseJob(text),
   );
-  return { ...value, aiFailed };
+  return { ...value, aiFailed: aiFailed || Boolean(image && !client) };
 }
 
 // ---------------- AI 職涯健檢 ----------------
 // evaluation 由 matching.evaluate() 算好，AI 只負責把結果寫成可執行的建議
+// 回傳 { mismatchNotes, skillNotes, suggestions, aiFailed }
 export async function careerAdvice(resume, job, evaluation) {
-  const { value } = await tryAi(() => aiCareerAdvice(resume, job, evaluation), () => fallbackAdvice(resume, job, evaluation));
-  return value;
+  const base = fallbackAdvice(resume, job, evaluation);
+  const { value, aiFailed } = await tryAi(() => aiCareerAdvice(lean(resume), lean(job), evaluation), () => base);
+  // AI 漏掉的項目用規則版補上，畫面不會出現空白
+  return {
+    mismatchNotes: { ...base.mismatchNotes, ...value.mismatchNotes },
+    skillNotes: { ...base.skillNotes, ...value.skillNotes },
+    suggestions: value.suggestions?.length ? value.suggestions : base.suggestions,
+    aiFailed,
+  };
 }
 
 async function aiCareerAdvice(resume, job, evaluation) {
@@ -120,7 +150,7 @@ async function aiCareerAdvice(resume, job, evaluation) {
     `你是給大學生的職涯顧問。根據履歷與職缺的比對結果，用繁體中文給出：
 {
   "mismatchNotes": {"<check key>": "對每個不符合的項目，給一句具體建議，例如『建議先收藏，明年可直接投遞』"},
-  "skillNotes": {"<缺少的技能>": "一句話說明補強難易度"},
+  "skillNotes": {"<缺少的技能（必須和 evaluation.missingSkills / bonusMissing 裡的字完全相同）>": "一句話：補強難易度、大約要多久、可以做什麼作品證明（每個技能要寫得不一樣）"},
   "suggestions": ["3 點具體、可執行的建議，包含免費學習資源與大約所需時間"]
 }
 語氣友善、精簡。`,
@@ -139,7 +169,7 @@ export async function summarizeApplicant(resume, job) {
   const { value, aiFailed } = await tryAi(async () => {
     const out = await askJson(
       '你是招募助理。用繁體中文、60 字以內，摘要這位應徵者與此職缺最相關的重點（技能、經歷、可上班天數）。輸出 {"summary": "..."}',
-      JSON.stringify({ resume, job }),
+      JSON.stringify({ resume: lean(resume), job: lean(job) }),
     );
     return out.summary;
   }, () => fallbackSummary(resume));
@@ -256,12 +286,28 @@ function fallbackParseJob(text) {
   };
 }
 
+// 常見技能的補強建議（AI 忙碌時使用，讓每個技能的建議都不一樣）
+const SKILL_TIPS = [
+  [/^(sql|excel|google sheets)$/i, '約 2 週可上手：用公開資料集做一份查詢／樞紐分析報表。'],
+  [/python|^r$|統計/i, '約 4–6 週：跟著免費課程做一個資料分析小專案，放上 GitHub。'],
+  [/tableau|power ?bi|資料視覺化|looker/i, '約 2–3 週：用公開資料做一個互動儀表板，附上連結。'],
+  [/google analytics|^ga4?$|seo|廣告|投放/i, '約 2 週：考 Google 免費證照，並分析一個網站的流量。'],
+  [/剪輯|premiere|after effects|final cut|capcut|攝影/i, '約 2–3 週：剪一支 1 分鐘的作品影片（Vlog、活動紀錄皆可）。'],
+  [/figma|photoshop|illustrator|canva|設計|ui|ux/i, '約 2–4 週：重新設計一個你常用的 App 畫面，整理成作品集。'],
+  [/社群|文案|行銷|內容/i, '約 2 週：經營一個主題帳號或寫 5 篇貼文，記錄互動數據。'],
+  [/javascript|typescript|react|vue|node|java|c\+\+|c#|go|swift|kotlin|程式|後端|前端/i, '約 4–8 週：做一個小型網站或 App，放上 GitHub 並寫說明。'],
+  [/git|docker|linux/i, '約 1–2 週：在自己的專案中實際使用，並寫在履歷上。'],
+  [/英文|日文|韓文|多益|toeic|ielts|語/i, '需要較長時間：先報名檢定設定目標，同時累積口說練習。'],
+  [/會計|財務|稅/i, '約 4 週：修相關課程或考初階證照（例如會計事務丙級）。'],
+];
+const skillTip = (s) => (SKILL_TIPS.find(([re]) => re.test(s))?.[1]) || '可以從線上課程開始，完成一個小作品放進履歷。';
+
 function fallbackAdvice(resume, job, ev) {
   const mismatchNotes = {};
   for (const c of ev.checks.filter((c) => !c.ok)) {
     mismatchNotes[c.key] = c.key === 'grade' ? '建議先收藏，明年符合年級後可直接投遞。' : '此項為硬性條件，建議優先找其他職缺。';
   }
-  const skillNotes = Object.fromEntries(ev.missingSkills.concat(ev.bonusMissing).map((s) => [s, '短期可補，建議做一個小作品證明。']));
+  const skillNotes = Object.fromEntries(ev.missingSkills.concat(ev.bonusMissing).map((s) => [s, skillTip(s)]));
   const suggestions = ev.missingSkills.concat(ev.bonusMissing).slice(0, 2).map((s) => `先累積一份 ${s} 作品集（約 4 週）`);
   const ready = ev.checks.every((c) => c.ok) && !ev.missingSkills.length;
   suggestions.push(ready ? '條件都符合，可以直接投遞！' : '收藏此職缺，條件達成後直接投遞。');

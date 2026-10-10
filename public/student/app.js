@@ -1,26 +1,43 @@
-import { initAuth, api, $, $$, esc, toast, daysLeft, mmdd, splitList } from '/shared/api.js';
+import {
+  initAuth, api, $, $$, esc, toast, daysLeft, mmdd, splitList,
+  gradeLabel, inLineApp, openExternal, aiWaiting, prepareUpload, UPLOAD_ACCEPT,
+} from '/shared/api.js';
 
 const state = { cards: [], resumes: [], prefs: {} };
-const REGIONS = ['台北', '新北', '桃園', '台中', '台南', '高雄', '遠端'];
-const SCHEDULES = ['每週3天以上', '平日', '假日'];
-const DURATIONS = [{ v: 3, t: '3 個月以上' }, { v: 6, t: '6 個月以上' }, { v: 0, t: '不限' }];
-const STATUS_TEXT = { pending: '已投遞・等待回覆', shortlisted: '企業已收藏', interview: '🎉 邀請面試', rejected: '未錄取' };
+const REGIONS = ['台北', '新北', '桃園', '台中', '台南', '高雄', '遠端', '其他'];
+const SCHEDULES = ['每週3天以內', '每週3天以上', '平日', '假日'];
+// 2026 年基本工資時薪 196 元，選項從這裡往上
+const WAGES = [{ v: 0, t: '不限' }, { v: 200, t: '200 元以上' }, { v: 220, t: '220 元以上' }, { v: 250, t: '250 元以上' }, { v: 300, t: '300 元以上' }];
+const DURATIONS = [{ v: 0, t: '不限' }, { v: 3, t: '3 個月以上' }, { v: 6, t: '6 個月以上' }];
+const GRADES = [0, 1, 2, 3, 4, 5, 6];
+const STATUS_TEXT = { pending: '已投遞・等待回覆', shortlisted: '企業考慮中', interview: '🎉 邀請面試', rejected: '未錄取' };
+const TITLES = { swipe: '找實習', saved: '收藏・投遞', resumes: '我的履歷' };
+let currentTab = new URLSearchParams(location.search).get('tab') || 'swipe';
+let onSheetClose = null; // 面板被關掉時要做的事
 
 // =============== 啟動 ===============
 await initAuth('student');
 [state.resumes, state.prefs] = await Promise.all([api('/student/resumes'), api('/student/preferences')]);
-const startTab = new URLSearchParams(location.search).get('tab') || 'swipe';
-switchTab(startTab);
 
 $$('.tabbar button').forEach((b) => (b.onclick = () => switchTab(b.dataset.tab)));
-$('#open-filter').onclick = openFilter;
+$('#open-filter').onclick = () => openFilter();
 $('#new-resume').onclick = () => openResumeEditor();
 $$('#actions .round').forEach((b) => (b.onclick = () => decide(b.dataset.act)));
+// 在 LINE 裡開啟時，提供「用瀏覽器開啟」
+if (inLineApp()) {
+  $('#open-external').classList.remove('hidden');
+  $('#open-external').onclick = () => openExternal(`${location.origin}${location.pathname}?tab=${currentTab}`);
+}
+
+switchTab(currentTab);
+// 第一次使用：先設定想找的實習條件，再開始滑卡
+if (currentTab === 'swipe' && !state.prefs.onboarded) openFilter({ welcome: true });
 
 function switchTab(tab) {
+  currentTab = tab;
   $$('.tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
   $$('.tab').forEach((t) => t.classList.toggle('hidden', t.id !== `tab-${tab}`));
-  $('#page-title').textContent = { swipe: '找實習', resumes: '我的履歷', saved: '收藏・投遞' }[tab];
+  $('#page-title').textContent = TITLES[tab];
   $('#open-filter').classList.toggle('hidden', tab !== 'swipe');
   if (tab === 'swipe') loadCards();
   if (tab === 'resumes') renderResumes();
@@ -41,7 +58,6 @@ function openSheet(title, html, icon = '') {
   backdrop.onclick = (e) => { if (e.target === backdrop || e.target.closest('[data-close]')) closeSheet(); };
   return $('.sheet-body', root);
 }
-let onSheetClose = null;
 function closeSheet() {
   $('#sheet-root').innerHTML = '';
   const cb = onSheetClose;
@@ -49,9 +65,18 @@ function closeSheet() {
   cb?.();
 }
 
+const spinnerHtml = (text) => `<div class="empty"><span class="spinner dark"></span> ${text}</div>`;
+
 // =============== 滑卡 ===============
 async function loadCards() {
-  state.cards = await api('/student/cards');
+  $('#deck').innerHTML = '<div class="card skeleton"><div class="sk sk-head"></div><div class="sk"></div><div class="sk"></div><div class="sk short"></div></div>';
+  $('#actions').classList.add('hidden');
+  try {
+    state.cards = await api('/student/cards');
+  } catch (err) {
+    state.cards = [];
+    toast(err.message);
+  }
   renderDeck();
 }
 
@@ -63,7 +88,7 @@ function renderDeck() {
     deck.innerHTML = `<div class="empty">目前沒有符合條件的新職缺 🙌<br><br>
       <button class="btn primary hidden" id="empty-restore"></button>
       <button class="btn" id="empty-filter">調整篩選條件</button></div>`;
-    $('#empty-filter').onclick = openFilter;
+    $('#empty-filter').onclick = () => openFilter();
     showRestoreButton();
     return;
   }
@@ -180,41 +205,68 @@ async function submit(job, action, resumeId) {
 }
 
 // =============== 職缺詳情 + AI 職涯健檢 ===============
-function openJobDetail(job) {
+// extra：從「收藏・投遞」打開時，附上目前狀態與下方的按鈕
+function openJobDetail(job, extra = {}) {
   const r = job.requirements || {};
-  const body = openSheet(job.title, `
-    <p><b>${esc(job.companyName)}</b></p>
-    <p>${esc(job.description)}</p>
+  const left = daysLeft(job.deadline);
+  const chips = (list, cls) => (list?.length ? list.map((s) => `<span class="chip ${cls}">${esc(s)}</span>`).join('') : '<span class="muted small">不限</span>');
+  const body = openSheet('職缺詳情', `
+    <div class="detail-head">
+      <div class="avatar">${esc(job.companyName.slice(0, 2))}</div>
+      <div><h3>${esc(job.title)}</h3><div class="muted small">${esc(job.companyName)}</div>
+        <div style="margin-top:6px"><span class="tag">${esc(job.category || '實習')}</span>${job.status === 'closed' ? ' <span class="tag bad">職缺已關閉</span>' : ''}</div></div>
+    </div>
+    ${extra.statusHtml || ''}
+    <div class="tiles">
+      <div class="tile"><div class="k">💲 時薪</div><div class="v">${esc(job.wage)} 元</div></div>
+      <div class="tile"><div class="k">📍 地點</div><div class="v">${esc(job.location || '—')}</div></div>
+      <div class="tile"><div class="k">🕒 上班時間</div><div class="v">每週 ${esc(job.daysPerWeek)} 天${job.weekend ? '・含假日' : ''}</div></div>
+      <div class="tile"><div class="k">📅 報名截止</div><div class="v">${mmdd(job.deadline)}${left !== null && left >= 0 && left <= 7 ? ` <span class="tag bad">剩 ${left} 天</span>` : ''}</div></div>
+    </div>
+    <div class="section-title">📝 工作內容</div>
+    <div class="box"><p style="margin:0;line-height:1.7">${esc(job.description || '—')}</p><div class="muted small" style="margin-top:6px">實習期間 ${esc(job.durationMonths)} 個月</div></div>
+    <div class="section-title">🎯 要求條件</div>
     <div class="box">
-      💲 時薪 ${esc(job.wage)} 元<br>📍 ${esc(job.location)}<br>
-      🕒 每週 ${esc(job.daysPerWeek)} 天・${esc(job.durationMonths)} 個月${job.weekend ? '（含假日）' : ''}<br>📅 報名截止 ${esc(job.deadline || '—')}
+      <dl class="kv">
+        <dt>學歷</dt><dd>${esc(r.degree || '不限')}</dd>
+        <dt>科系</dt><dd>${esc(r.departments?.join('、') || '不限')}</dd>
+        <dt>年級</dt><dd>${r.minGrade ? `${gradeLabel(r.minGrade)}以上` : '不限'}</dd>
+        <dt>經歷</dt><dd>${esc(r.experience || '不拘')}</dd>
+        <dt>語言</dt><dd>${esc(r.languages?.join('、') || '不限')}</dd>
+      </dl>
     </div>
-    <div class="section-title">要求條件</div>
-    <div class="box small">
-      學歷：${esc(r.degree || '不限')}　科系：${esc(r.departments?.join('、') || '不限')}<br>
-      年級：${r.minGrade ? `大${'一二三四'[r.minGrade - 1]}以上` : '不限'}　經歷：${esc(r.experience || '不拘')}　語言：${esc(r.languages?.join('、') || '不限')}<br>
-      必備技能：${esc((job.requiredSkills || []).join('、') || '—')}<br>
-      加分條件：${esc((job.bonusSkills || []).join('、') || '—')}
+    <div class="section-title">🛠 技能</div>
+    <div class="box">
+      <div class="small muted" style="margin-bottom:6px">必備</div><div class="chips">${chips(job.requiredSkills, 'req')}</div>
+      <div class="small muted" style="margin:10px 0 6px">加分</div><div class="chips">${chips(job.bonusSkills, 'bonus')}</div>
     </div>
-    ${job.benefits?.length ? `<div class="section-title">公司福利</div><div class="chips">${job.benefits.map((b) => `<span class="chip">${esc(b)}</span>`).join('')}</div>` : ''}
-    <div style="margin-top:18px"><button class="btn primary block" id="do-check">✨ AI 職涯健檢</button></div>
+    ${job.benefits?.length ? `<div class="section-title">🎁 公司福利</div><div class="chips">${job.benefits.map((b) => `<span class="chip on">${esc(b)}</span>`).join('')}</div>` : ''}
+    <div style="margin-top:18px;display:grid;gap:10px">
+      ${extra.actionHtml || ''}
+      <button class="btn ${extra.actionHtml ? '' : 'primary'} block" id="do-check">✨ AI 職涯健檢：我適合這個職缺嗎？</button>
+    </div>
   `);
   $('#do-check', body).onclick = () => openCareerCheck(job);
+  return body;
 }
 
 async function openCareerCheck(job) {
   const resumeId = state.prefs.resumeId || state.resumes[0]?.id;
   if (!resumeId) {
     toast('請先建立一份履歷');
+    closeSheet();
     return switchTab('resumes');
   }
-  const body = openSheet('AI 職涯健診', `<div class="empty"><span class="spinner" style="border-color:var(--green);border-right-color:transparent"></span> 分析中…</div>`, '<span class="logo">✓</span>');
+  const body = openSheet('AI 職涯健診', `<div class="empty"><span class="spinner dark"></span> AI 分析中… <span id="ck-sec">0</span> 秒<br><span class="small">通常需要 10–20 秒</span></div>`, '<span class="logo">✓</span>');
+  const start = Date.now();
+  const timer = setInterval(() => { const el = $('#ck-sec', body); if (el) el.textContent = Math.floor((Date.now() - start) / 1000); }, 1000);
   try {
-    const { evaluation: ev, advice } = await api('/student/career-check', { method: 'POST', body: { jobId: job.id, resumeId } });
+    const { evaluation: ev, advice, aiFailed } = await api('/student/career-check', { method: 'POST', body: { jobId: job.id, resumeId } });
     const ok = ev.checks.filter((c) => c.ok);
     const bad = ev.checks.filter((c) => !c.ok);
     const missing = [...ev.missingSkills, ...ev.bonusMissing];
     body.innerHTML = `
+      ${aiFailed ? '<div class="notice">⚠️ AI 目前忙碌，以下是基本建議，稍後再試一次可以拿到 AI 的個人化建議。</div>' : ''}
       <p class="muted small">${esc(job.title)}・${esc(job.companyName)}</p>
       <div class="section-title">✅ 你已具備</div>
       <div class="chips">${[...ok.map((c) => `${c.label}`), ...ev.matchedSkills, ...ev.bonusMatched].map((t) => `<span class="chip on">${esc(t)}</span>`).join('') || '<span class="muted small">—</span>'}</div>
@@ -226,6 +278,8 @@ async function openCareerCheck(job) {
       <p class="muted small">根據履歷：${esc(state.resumes.find((r) => r.id === resumeId)?.title || '')}（可在篩選條件中切換）</p>`;
   } catch (err) {
     body.innerHTML = `<div class="empty">${esc(err.message)}</div>`;
+  } finally {
+    clearInterval(timer);
   }
 }
 
@@ -268,58 +322,97 @@ const ago = (iso) => {
   return d <= 0 ? '今天' : d < 7 ? `${d} 天前` : `${Math.floor(d / 7)} 週前`;
 };
 
-// =============== 篩選條件 ===============
-async function openFilter() {
-  const p = { regions: [], schedules: [], minWage: 0, minDuration: 0, smartSort: false, ...state.prefs };
+// =============== 篩選條件（第一次使用時也用這個面板設定）===============
+async function openFilter({ welcome = false } = {}) {
+  const p = { regions: [], schedules: [], categories: [], minWage: 0, minDuration: 0, smartSort: true, ...state.prefs };
   const hasResume = state.resumes.length > 0;
   if (!p.resumeId && hasResume) p.resumeId = state.resumes[0].id;
 
-  const chips = (key, items) => items.map((v) => `<button class="chip ${p[key].includes(v) ? 'on' : ''}" data-key="${key}" data-v="${esc(v)}">${esc(v)}</button>`).join('');
+  const multi = (key, items) => items.map((v) => `<button class="chip ${p[key].includes(v) ? 'on' : ''}" data-key="${key}" data-v="${esc(v)}">${esc(v)}</button>`).join('');
+  const single = (key, items) => items.map((o) => `<button class="chip ${p[key] === o.v ? 'on' : ''}" data-one="${key}" data-v="${o.v}">${o.t}</button>`).join('');
 
-  const body = openSheet('篩選條件', `
+  const body = openSheet(welcome ? '歡迎使用實習 Swipe 👋' : '篩選條件', `
+    ${welcome ? '<p class="muted" style="margin-top:0">先告訴我們你想找什麼樣的實習，之後隨時可以按右上角「篩選」修改。都不選代表「不限」。</p>' : ''}
+    <div class="filter-group"><div class="label">職業類別 <em>可複選</em></div><div class="chips" id="f-cats"><span class="muted small">載入中…</span></div></div>
+    <div class="filter-group"><div class="label">地區 <em>可複選</em></div><div class="chips">${multi('regions', REGIONS)}</div></div>
+    <div class="filter-group"><div class="label">期望時薪 <em>基本工資 196 元</em></div><div class="chips">${single('minWage', WAGES)}</div></div>
+    <div class="filter-group"><div class="label">上班時段</div><div class="chips">${multi('schedules', SCHEDULES)}</div></div>
+    <div class="filter-group"><div class="label">實習時長</div><div class="chips">${single('minDuration', DURATIONS)}</div></div>
     <div class="box green">
       <div style="display:flex;align-items:center;gap:10px">
         <b style="flex:1">✨ 根據我的履歷智慧排序</b>
         <label class="switch"><input type="checkbox" id="f-smart" ${p.smartSort && hasResume ? 'checked' : ''} ${hasResume ? '' : 'disabled'}><span></span></label>
       </div>
-      <p class="small muted">先篩掉不符的硬條件，再用 AI 把最適合你的排前面。</p>
+      <p class="small muted">把最適合你的職缺排在前面，也會參考你滑卡的喜好。</p>
       ${hasResume ? `<select class="input small" id="f-resume">${state.resumes.map((r) => `<option value="${esc(r.id)}" ${r.id === p.resumeId ? 'selected' : ''}>依據履歷：${esc(r.title)}</option>`).join('')}</select>`
-        : '<p class="small muted">尚未建立履歷時，此選項無法開啟，仍可依下列條件瀏覽。</p>'}
+        : '<p class="small muted" style="margin-bottom:0">建立履歷後就能開啟。</p>'}
     </div>
-    <div class="filter-group"><div class="label">地區</div><div class="chips">${chips('regions', REGIONS)}</div></div>
-    <div class="filter-group"><div class="label">上班時段</div><div class="chips">${chips('schedules', SCHEDULES)}</div></div>
-    <div class="filter-group"><div class="label">期望薪資 <em id="f-wage-text"></em></div><input type="range" id="f-wage" min="0" max="300" step="10" value="${p.minWage}"></div>
-    <div class="filter-group"><div class="label">實習時長</div><div class="chips">${DURATIONS.map((d) => `<button class="chip ${p.minDuration === d.v ? 'on' : ''}" data-dur="${d.v}">${d.t}</button>`).join('')}</div></div>
-    <button class="btn primary block" id="f-apply">查看符合職缺</button>`, '<span class="logo">⚙︎</span>');
+    <div class="sheet-foot">
+      <button class="btn primary block" id="f-apply">查看符合職缺</button>
+    </div>`, '<span class="logo">⚙︎</span>');
 
+  // 關掉面板也算完成第一次設定，之後不再自動跳出
+  if (welcome) onSheetClose = () => savePrefs({ ...state.prefs, onboarded: true });
+
+  // 只採用最後一次查詢的結果，避免快速連點時數字跳來跳去
+  let seq = 0;
   const refreshCount = async () => {
-    $('#f-wage-text', body).textContent = p.minWage ? `時薪 ${p.minWage} 元以上` : '不限';
-    const { count } = await api('/student/cards/count', { method: 'POST', body: p });
-    $('#f-apply', body).textContent = `查看 ${count} 個符合職缺`;
+    const mine = ++seq;
+    const btn = $('#f-apply', body);
+    btn.innerHTML = '<span class="spinner"></span> 計算中…';
+    try {
+      const { count } = await api('/student/cards/count', { method: 'POST', body: p });
+      if (mine === seq) btn.textContent = count ? `查看 ${count} 個符合職缺` : '沒有符合的新職缺，放寬一點條件吧';
+    } catch {
+      if (mine === seq) btn.textContent = '查看符合職缺';
+    }
   };
-
-  $$('[data-key]', body).forEach((b) => (b.onclick = () => {
-    const list = p[b.dataset.key];
-    const i = list.indexOf(b.dataset.v);
-    i >= 0 ? list.splice(i, 1) : list.push(b.dataset.v);
-    b.classList.toggle('on');
+  const bindChips = (root) => {
+    $$('[data-key]', root).forEach((b) => (b.onclick = () => {
+      const list = p[b.dataset.key];
+      const i = list.indexOf(b.dataset.v);
+      i >= 0 ? list.splice(i, 1) : list.push(b.dataset.v);
+      b.classList.toggle('on');
+      refreshCount();
+    }));
+  };
+  bindChips(body);
+  $$('[data-one]', body).forEach((b) => (b.onclick = () => {
+    const key = b.dataset.one;
+    p[key] = Number(b.dataset.v);
+    $$(`[data-one="${key}"]`, body).forEach((x) => x.classList.toggle('on', x === b));
     refreshCount();
   }));
-  $$('[data-dur]', body).forEach((b) => (b.onclick = () => {
-    p.minDuration = Number(b.dataset.dur);
-    $$('[data-dur]', body).forEach((x) => x.classList.toggle('on', x === b));
-    refreshCount();
-  }));
-  $('#f-wage', body).oninput = (e) => { p.minWage = Number(e.target.value); refreshCount(); };
   $('#f-smart', body).onchange = (e) => (p.smartSort = e.target.checked);
   if (hasResume) $('#f-resume', body).onchange = (e) => (p.resumeId = e.target.value);
 
-  $('#f-apply', body).onclick = async () => {
-    state.prefs = await api('/student/preferences', { method: 'PUT', body: p });
-    closeSheet();
-    switchTab('swipe');
+  $('#f-apply', body).onclick = async (e) => {
+    e.target.disabled = true;
+    e.target.innerHTML = '<span class="spinner"></span> 套用中…';
+    onSheetClose = null;
+    try {
+      await savePrefs({ ...p, onboarded: true });
+      closeSheet();
+      switchTab('swipe');
+    } catch (err) {
+      toast(err.message);
+      e.target.disabled = false;
+      e.target.textContent = '查看符合職缺';
+    }
   };
+
+  // 職業類別：依目前有開放的職缺動態產生
+  api('/student/categories').then((cats) => {
+    const names = cats.map((c) => c.name);
+    for (const c of p.categories) if (!names.includes(c)) names.push(c); // 已選但目前沒職缺的也保留
+    $('#f-cats', body).innerHTML = names.length ? multi('categories', names) : '<span class="muted small">目前沒有職缺</span>';
+    bindChips($('#f-cats', body));
+  }).catch(() => ($('#f-cats', body).innerHTML = '<span class="muted small">載入失敗</span>'));
   refreshCount();
+}
+
+async function savePrefs(p) {
+  state.prefs = await api('/student/preferences', { method: 'PUT', body: p });
 }
 
 // =============== 履歷 ===============
@@ -328,13 +421,14 @@ function renderResumes() {
   list.innerHTML = state.resumes.length
     ? state.resumes.map((r) => `
       <div class="item"><div class="item-row">
+        <div class="avatar">📄</div>
         <div class="grow"><h4>${esc(r.title)}</h4>
-          <div class="muted small">${esc(r.school)} ${esc(r.department)}・${ago(r.updatedAt)}更新</div>
-          <div class="chips" style="margin-top:8px">${(r.skills || []).map((s) => `<span class="tag">${esc(s)}</span>`).join('')}</div>
+          <div class="muted small">${esc(r.school)} ${esc(r.department)}・${gradeLabel(r.grade)}・${ago(r.updatedAt)}更新</div>
+          <div class="chips" style="margin-top:8px">${(r.skills || []).slice(0, 8).map((s) => `<span class="tag">${esc(s)}</span>`).join('')}</div>
         </div>
         <button class="btn" data-edit="${esc(r.id)}">編輯</button>
       </div></div>`).join('')
-    : '<div class="empty">還沒有履歷<br>上傳 PDF 或貼上文字，AI 10 秒幫你建好 ✨</div>';
+    : '<div class="empty">還沒有履歷<br>上傳 PDF、拍照或貼上文字，AI 幫你建好 ✨</div>';
   $$('[data-edit]', list).forEach((b) => (b.onclick = () => openResumeEditor(state.resumes.find((r) => r.id === b.dataset.edit))));
 }
 
@@ -342,45 +436,61 @@ function openResumeEditor(resume) {
   const body = openSheet(resume ? '編輯履歷' : '智慧建立履歷', `
     ${resume ? '' : `
     <div class="box green">
-      <b>✨ 上傳檔案，AI 自動填好</b>
-      <p class="small muted">支援 PDF 或 .txt；也可以直接貼上履歷文字。</p>
-      <input type="file" id="r-file" accept=".pdf,.txt" class="small">
+      <b>✨ 上傳履歷，AI 自動填好</b>
+      <p class="small muted">支援 PDF、文字檔，也可以直接拍照或從相簿選履歷照片；或在下面貼上履歷文字。</p>
+      <div class="upload-pick">
+        <label class="btn" for="r-file">📎 選擇檔案／照片</label>
+        <input type="file" id="r-file" accept="${UPLOAD_ACCEPT}">
+        <span class="file-name" id="r-file-name">尚未選擇</span>
+      </div>
       <textarea class="input" id="r-text" placeholder="或貼上履歷文字…" style="margin-top:8px"></textarea>
-      <button class="btn primary" id="r-parse" style="margin-top:8px">AI 解析</button>
+      <button class="btn primary block" id="r-parse" style="margin-top:8px">✨ AI 解析</button>
     </div>`}
     <form id="r-form"></form>`);
   const form = $('#r-form', body);
   const fill = (r = {}) => {
     form.innerHTML = `
       <label class="field"><span>履歷名稱（例如：數據分析履歷）</span><input class="input" name="title" required value="${esc(r.title)}"></label>
-      <div class="grid2">
-        <label class="field"><span>姓名</span><input class="input" name="name" value="${esc(r.name)}"></label>
-        <label class="field"><span>學校</span><input class="input" name="school" value="${esc(r.school)}"></label>
-        <label class="field"><span>科系</span><input class="input" name="department" value="${esc(r.department)}"></label>
-        <label class="field"><span>學歷</span><select class="input" name="degree">${['大學', '碩士', '專科', '高中職', '博士'].map((d) => `<option ${r.degree === d ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
-        <label class="field"><span>年級（大一=1，碩一=5）</span><input class="input" name="grade" type="number" min="1" max="8" value="${esc(r.grade)}"></label>
-        <label class="field"><span>預計畢業</span><input class="input" name="graduation" placeholder="2028/06" value="${esc(r.graduation)}"></label>
+      <div class="form-section">
+        <div class="section-title">👤 基本資料</div>
+        <div class="grid2">
+          <label class="field"><span>姓名</span><input class="input" name="name" value="${esc(r.name)}"></label>
+          <label class="field"><span>學校</span><input class="input" name="school" value="${esc(r.school)}"></label>
+          <label class="field"><span>科系</span><input class="input" name="department" value="${esc(r.department)}"></label>
+          <label class="field"><span>學歷</span><select class="input" name="degree">${['大學', '碩士', '專科', '高中職', '博士'].map((d) => `<option ${r.degree === d ? 'selected' : ''}>${d}</option>`).join('')}</select></label>
+          <label class="field"><span>年級</span><select class="input" name="grade">${GRADES.map((g) => `<option value="${g}" ${Number(r.grade || 0) === g ? 'selected' : ''}>${g ? gradeLabel(g) : '請選擇'}</option>`).join('')}</select></label>
+          <label class="field"><span>預計畢業</span><input class="input" name="graduation" placeholder="2028/06" value="${esc(r.graduation)}"></label>
+        </div>
       </div>
-      <label class="field"><span>技能（用逗號分隔）</span><input class="input" name="skills" value="${esc((r.skills || []).join(', '))}"></label>
-      <label class="field"><span>語言（例如：中文:母語, 英文:多益 750）</span><input class="input" name="languages" value="${esc((r.languages || []).map((l) => `${l.name}:${l.level || ''}`).join(', '))}"></label>
-      <label class="field"><span>專案與經歷（一行一筆：名稱 | 年份 | 描述）</span><textarea class="input" name="experiences">${esc((r.experiences || []).map((e) => `${e.title} | ${e.year} | ${e.description}`).join('\n'))}</textarea></label>
-      <label class="field"><span>作品集連結（一行一個）</span><textarea class="input" name="links" style="min-height:50px">${esc((r.links || []).join('\n'))}</textarea></label>
-      <div class="grid2">
-        <label class="field"><span>Email</span><input class="input" name="email" value="${esc(r.contact?.email)}"></label>
-        <label class="field"><span>電話</span><input class="input" name="phone" value="${esc(r.contact?.phone)}"></label>
+      <div class="form-section">
+        <div class="section-title">🛠 技能與語言</div>
+        <label class="field"><span>技能（用逗號分隔）</span><input class="input" name="skills" placeholder="Excel, Python, Canva" value="${esc((r.skills || []).join(', '))}"></label>
+        <label class="field"><span>語言（例如：中文:母語, 英文:多益 750）</span><input class="input" name="languages" value="${esc((r.languages || []).map((l) => `${l.name}:${l.level || ''}`).join(', '))}"></label>
+      </div>
+      <div class="form-section">
+        <div class="section-title">📁 經歷與作品</div>
+        <label class="field"><span>專案與經歷（一行一筆：名稱 | 年份 | 描述）</span><textarea class="input" name="experiences" placeholder="系學會公關長 | 2025 | 經營 IG，追蹤數成長 2 倍">${esc((r.experiences || []).map((e) => `${e.title} | ${e.year} | ${e.description}`).join('\n'))}</textarea></label>
+        <label class="field"><span>作品集連結（一行一個）</span><textarea class="input" name="links" style="min-height:50px">${esc((r.links || []).join('\n'))}</textarea></label>
+      </div>
+      <div class="form-section">
+        <div class="section-title">✉️ 聯絡方式</div>
+        <div class="grid2">
+          <label class="field"><span>Email</span><input class="input" name="email" type="email" value="${esc(r.contact?.email)}"></label>
+          <label class="field"><span>電話</span><input class="input" name="phone" type="tel" value="${esc(r.contact?.phone)}"></label>
+        </div>
       </div>
       <button class="btn primary block">儲存履歷</button>`;
   };
   fill(resume);
 
   if (!resume) {
+    $('#r-file', body).onchange = (e) => ($('#r-file-name', body).textContent = e.target.files[0]?.name || '尚未選擇');
     $('#r-parse', body).onclick = async (e) => {
       const fd = new FormData();
-      const file = $('#r-file', body).files[0];
+      const file = await prepareUpload($('#r-file', body).files[0]);
       if (file) fd.append('file', file);
       fd.append('text', $('#r-text', body).value);
-      e.target.disabled = true;
-      e.target.innerHTML = '<span class="spinner"></span> 解析中…';
+      const stop = aiWaiting(e.currentTarget, 'AI 解析中');
       try {
         const parsed = await api('/student/resumes/parse', { method: 'POST', form: fd });
         fill({ title: `${parsed.department || ''}履歷`, ...parsed });
@@ -388,8 +498,7 @@ function openResumeEditor(resume) {
       } catch (err) {
         toast(err.message);
       }
-      e.target.disabled = false;
-      e.target.textContent = 'AI 解析';
+      stop();
     };
   }
 
@@ -406,37 +515,55 @@ function openResumeEditor(resume) {
       links: f.links.split('\n').map((x) => x.trim()).filter(Boolean),
       contact: { email: f.email, phone: f.phone },
     };
-    await api('/student/resumes', { method: 'POST', body: data });
-    state.resumes = await api('/student/resumes');
-    closeSheet();
-    renderResumes();
-    toast('履歷已儲存');
+    const btn = $('button:last-child', form);
+    btn.disabled = true;
+    try {
+      await api('/student/resumes', { method: 'POST', body: data });
+      state.resumes = await api('/student/resumes');
+      closeSheet();
+      renderResumes();
+      toast('履歷已儲存');
+    } catch (err) {
+      toast(err.message);
+      btn.disabled = false;
+    }
   };
 }
 
 // =============== 收藏・投遞 ===============
 async function loadSaved() {
-  const rows = await api('/student/saved');
   const list = $('#saved-list');
+  list.innerHTML = spinnerHtml('載入中…');
+  const rows = await api('/student/saved');
   if (!rows.length) {
     list.innerHTML = '<div class="empty">還沒有收藏或投遞的職缺<br>上滑可以收藏，截止前會用 LINE 提醒你</div>';
     return;
   }
   rows.sort((a, b) => (a.job.deadline || '').localeCompare(b.job.deadline || ''));
-  list.innerHTML = rows.map((r) => {
+  const canApply = (r) => r.action === 'save' && r.job.status !== 'closed' && daysLeft(r.job.deadline) >= 0;
+  const statusTag = (r) => {
     const left = daysLeft(r.job.deadline);
-    const status = r.action === 'apply'
-      ? `<span class="tag ${r.status === 'rejected' ? 'bad' : ''}">${STATUS_TEXT[r.status] || '已投遞'}</span>`
-      : `<span class="tag warn">🔔 已收藏${left !== null ? (left >= 0 ? `・剩 ${left} 天截止` : '・已截止') : ''}</span>`;
-    return `
-      <div class="item"><div class="item-row">
+    if (r.action === 'apply') return `<span class="tag ${r.status === 'rejected' ? 'bad' : ''}">${STATUS_TEXT[r.status] || '已投遞'}</span>`;
+    if (r.job.status === 'closed') return '<span class="tag bad">職缺已關閉</span>';
+    return `<span class="tag warn">🔔 已收藏${left !== null ? (left >= 0 ? `・剩 ${left} 天截止` : '・已截止') : ''}</span>`;
+  };
+  const interviewHtml = (i) => (i ? `
+    <div class="interview">
+      <b>🎉 面試資訊</b>
+      <div>📅 ${esc(i.date)} ${esc(i.time)}${i.mode ? `・${esc(i.mode)}` : ''}</div>
+      ${i.place ? `<div>📍 ${esc(i.place)}</div>` : ''}
+      ${i.contact ? `<div>☎️ ${esc(i.contact)}</div>` : ''}
+      ${i.note ? `<div class="muted">${esc(i.note)}</div>` : ''}
+    </div>` : '');
+
+  list.innerHTML = rows.map((r) => `
+      <div class="item tappable" data-open="${esc(r.id)}"><div class="item-row">
         <div class="avatar">${esc(r.job.companyName.slice(0, 2))}</div>
-        <div class="grow"><h4>${esc(r.job.title)}</h4><div class="muted small">${esc(r.job.companyName)}・截止 ${mmdd(r.job.deadline)}</div><div style="margin-top:6px">${status}</div></div>
-        ${r.action === 'save' && left >= 0 ? `<button class="btn primary" data-apply="${esc(r.id)}">投遞</button>` : ''}
-      </div></div>`;
-  }).join('');
-  $$('[data-apply]', list).forEach((b) => (b.onclick = async () => {
-    const row = rows.find((r) => r.id === b.dataset.apply);
+        <div class="grow"><h4>${esc(r.job.title)}</h4><div class="muted small">${esc(r.job.companyName)}・截止 ${mmdd(r.job.deadline)}</div><div style="margin-top:6px">${statusTag(r)}</div></div>
+        ${canApply(r) ? `<button class="btn primary" data-apply="${esc(r.id)}">投遞</button>` : '<span class="chev">›</span>'}
+      </div>${r.status === 'interview' ? interviewHtml(r.interview) : ''}</div>`).join('');
+
+  const applyFromSaved = async (row) => {
     const resumeId = await pickResume(row.job);
     if (!resumeId) return;
     try {
@@ -446,5 +573,19 @@ async function loadSaved() {
     } catch (err) {
       toast(err.message);
     }
+  };
+  $$('[data-apply]', list).forEach((b) => (b.onclick = (e) => {
+    e.stopPropagation();
+    applyFromSaved(rows.find((r) => r.id === b.dataset.apply));
+  }));
+  // 點整張卡片：打開職缺詳情
+  $$('[data-open]', list).forEach((el) => (el.onclick = () => {
+    const row = rows.find((r) => r.id === el.dataset.open);
+    const body = openJobDetail(row.job, {
+      statusHtml: `<div style="margin-bottom:12px">${statusTag(row)}</div>${row.status === 'interview' ? interviewHtml(row.interview) : ''}`,
+      actionHtml: canApply(row) ? '<button class="btn primary block" id="detail-apply">➤ 投遞這個職缺</button>' : '',
+    });
+    const btn = $('#detail-apply', body);
+    if (btn) btn.onclick = () => { closeSheet(); applyFromSaved(row); };
   }));
 }

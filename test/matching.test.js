@@ -22,6 +22,15 @@ test('硬條件篩選：地區、薪資、時長、時段', () => {
   assert.equal(passesFilters({ ...job, deadline: '2000-01-01' }, {}), false, '已截止的職缺不出現');
 });
 
+test('職業類別、每週 3 天以內、其他地區', () => {
+  const j = { ...job, category: '數據分析' };
+  assert.equal(passesFilters(j, { categories: ['數據分析'] }), true);
+  assert.equal(passesFilters(j, { categories: ['設計'] }), false);
+  assert.equal(passesFilters(j, { schedules: ['每週3天以內'] }), true);
+  assert.equal(passesFilters({ ...j, daysPerWeek: 4 }, { schedules: ['每週3天以內'] }), false);
+  assert.equal(passesFilters({ ...j, region: '其他' }, { regions: ['其他'] }), true);
+});
+
 test('年級不足會被標記，技能大小寫不敏感', () => {
   const resume = { degree: '大學', department: '資管系', grade: 2, skills: ['sql', 'Python', 'Excel'], languages: [{ name: '中文' }] };
   const ev = evaluate(resume, job);

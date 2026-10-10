@@ -57,7 +57,7 @@ export async function pushMessage(to, messages) {
 export function linkCard({ title, body, buttonLabel, url }) {
   return {
     type: 'flex',
-    altText: `${title}：${body}`,
+    altText: `${title}：${body}`.slice(0, 400), // LINE 限制 400 字
     contents: {
       type: 'bubble',
       body: {

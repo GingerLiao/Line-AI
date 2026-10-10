@@ -1,5 +1,5 @@
 // 媒合邏輯（不需要 AI，可預期、可測試）
-//  1. passesFilters：學生設定的「硬條件」（地區、時段、薪資、時長）
+//  1. passesFilters：學生設定的「硬條件」（地區、職業類別、時段、薪資、時長）
 //  2. evaluate：拿履歷跟職缺的要求條件逐項比對，算出分數
 // AI 只負責「把文字變結構化」與「寫建議」，判斷對錯交給這裡，避免 AI 亂判。
 
@@ -15,14 +15,16 @@ const hasSkill = (skills, target) => skills.some((s) => norm(s) === norm(target)
 
 // ---------- 1. 硬條件篩選 ----------
 export function passesFilters(job, prefs = {}) {
-  const { regions = [], schedules = [], minWage = 0, minDuration = 0 } = prefs;
+  const { regions = [], schedules = [], categories = [], minWage = 0, minDuration = 0 } = prefs;
 
-  if (regions.length && !regions.includes(job.region)) return false;
+  if (regions.length && !regions.includes(job.region || '其他')) return false;
+  if (categories.length && !categories.includes(job.category)) return false;
   if (minWage && job.wage < minWage) return false;
   if (minDuration && job.durationMonths < minDuration) return false;
   if (schedules.length) {
     const ok = schedules.some((s) => {
       if (s === '每週3天以上') return job.daysPerWeek >= 3;
+      if (s === '每週3天以內') return job.daysPerWeek > 0 && job.daysPerWeek <= 3;
       if (s === '平日') return !job.weekend;
       if (s === '假日') return Boolean(job.weekend);
       return true;

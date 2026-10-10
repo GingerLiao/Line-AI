@@ -15,7 +15,7 @@ export function demoJobs(inDays) {
   {
     companyName: '青禾設計有限公司', title: 'UI/UX 設計實習生', category: '設計',
     description: '參與 App 介面設計、使用者訪談與原型測試。',
-    wage: 190, location: '台北信義', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 3,
+    wage: 200, location: '台北信義', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 3,
     deadline: inDays(10),
     requirements: { degree: '大學以上', departments: [], minGrade: 0, experience: '不拘', languages: ['中文'] },
     requiredSkills: ['Figma'], bonusSkills: ['Illustrator'], benefits: ['彈性工時'],
@@ -31,7 +31,7 @@ export function demoJobs(inDays) {
   {
     companyName: '好日子行銷有限公司', title: '社群行銷實習生', category: '行銷企劃',
     description: '經營 IG 與 Threads、撰寫貼文文案、整理成效數據。',
-    wage: 183, location: '遠端', region: '遠端', daysPerWeek: 2, weekend: true, durationMonths: 3,
+    wage: 196, location: '遠端', region: '遠端', daysPerWeek: 2, weekend: true, durationMonths: 3,
     deadline: inDays(5),
     requirements: { degree: '', departments: [], minGrade: 0, experience: '不拘', languages: ['中文'] },
     requiredSkills: ['社群經營', '文案'], bonusSkills: ['Canva', 'Google Analytics'], benefits: ['遠端工作'],
@@ -39,7 +39,7 @@ export function demoJobs(inDays) {
   {
     companyName: '北辰物流股份有限公司', title: '營運資料實習生', category: '數據分析',
     description: '用 Excel 與 Power BI 製作物流儀表板。',
-    wage: 185, location: '桃園龜山', region: '桃園', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '桃園龜山', region: '桃園', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(15),
     requirements: { degree: '大學以上', departments: [], minGrade: 0, experience: '不拘', languages: ['中文'] },
     requiredSkills: ['Excel', 'Power BI'], bonusSkills: ['SQL'], benefits: ['交通補助'],
@@ -47,7 +47,7 @@ export function demoJobs(inDays) {
   {
     companyName: '森光生活股份有限公司', title: '品牌行銷實習生', category: '行銷企劃',
     description: '協助品牌活動企劃、撰寫 IG 貼文與 EDM，追蹤廣告成效。',
-    wage: 190, location: '台北中山', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '台北中山', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(12),
     requirements: { degree: '大學以上', departments: [], minGrade: 0, experience: '不拘', languages: ['中文'] },
     requiredSkills: ['文案', '社群經營'], bonusSkills: ['Canva', 'Google Analytics'], benefits: ['彈性工時'],
@@ -55,7 +55,7 @@ export function demoJobs(inDays) {
   {
     companyName: '小日子文化有限公司', title: '內容企劃實習生', category: '行銷企劃',
     description: '規劃社群內容主題、拍攝短影音並剪輯，經營品牌粉專。',
-    wage: 185, location: '新北永和', region: '新北', daysPerWeek: 3, weekend: false, durationMonths: 3,
+    wage: 200, location: '新北永和', region: '新北', daysPerWeek: 3, weekend: false, durationMonths: 3,
     deadline: inDays(9),
     requirements: { degree: '', departments: [], minGrade: 0, experience: '不拘', languages: ['中文'] },
     requiredSkills: ['文案', '剪輯'], bonusSkills: ['Premiere'], benefits: ['遠端工作'],
@@ -81,13 +81,13 @@ export function demoJobs(inDays) {
   {
     companyName: '拾光影像工作室', title: '影音剪輯實習生', category: '影音製作',
     description: '剪輯品牌短影音與活動紀錄影片，協助字幕、配樂與後製調色。',
-    wage: 190, location: '台北松山', region: '台北', daysPerWeek: 3, weekend: true, durationMonths: 3,
+    wage: 200, location: '台北松山', region: '台北', daysPerWeek: 3, weekend: true, durationMonths: 3,
     deadline: inDays(6), requirements: req(), requiredSkills: ['剪輯', 'Premiere'], bonusSkills: ['After Effects'], benefits: ['彈性工時'],
   },
   {
     companyName: '晨曦設計有限公司', title: '平面設計實習生', category: '設計',
     description: '設計活動海報、社群圖卡與包裝視覺，參與品牌識別提案。',
-    wage: 185, location: '台中西屯', region: '台中', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '台中西屯', region: '台中', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(14), requirements: req(), requiredSkills: ['Illustrator', 'Photoshop'], bonusSkills: ['Figma'], benefits: ['作品可放作品集'],
   },
   {
@@ -111,13 +111,13 @@ export function demoJobs(inDays) {
   {
     companyName: '和光會計師事務所', title: '審計助理實習生', category: '財務會計',
     description: '協助查核憑證、整理工作底稿，參與客戶年度查帳。',
-    wage: 183, location: '高雄前鎮', region: '高雄', daysPerWeek: 4, weekend: false, durationMonths: 3,
+    wage: 196, location: '高雄前鎮', region: '高雄', daysPerWeek: 4, weekend: false, durationMonths: 3,
     deadline: inDays(4), requirements: req({ degree: '大學以上', departments: ['會計'] }), requiredSkills: ['Excel'], bonusSkills: [], benefits: ['正職優先錄取'],
   },
   {
     companyName: '匯流人資顧問有限公司', title: '人資招募實習生', category: '人力資源',
     description: '篩選履歷、安排面試，協助校園徵才活動與雇主品牌貼文。',
-    wage: 190, location: '台北大安', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '台北大安', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(11), requirements: req(), requiredSkills: ['Excel', '文書處理'], bonusSkills: ['社群經營'], benefits: ['彈性工時'],
   },
   {
@@ -129,25 +129,25 @@ export function demoJobs(inDays) {
   {
     companyName: '青苗教育科技有限公司', title: '線上教學助理實習生', category: '教育',
     description: '協助線上課程備課、製作教材簡報，並回覆學生課後問題。',
-    wage: 183, location: '遠端', region: '遠端', daysPerWeek: 2, weekend: true, durationMonths: 3,
+    wage: 196, location: '遠端', region: '遠端', daysPerWeek: 2, weekend: true, durationMonths: 3,
     deadline: inDays(10), requirements: req(), requiredSkills: ['簡報', 'Canva'], bonusSkills: [], benefits: ['遠端工作'],
   },
   {
     companyName: '森林生技股份有限公司', title: '生技研究助理實習生', category: '研究',
     description: '協助細胞培養與實驗紀錄，整理實驗數據並撰寫週報。',
-    wage: 195, location: '台南善化', region: '台南', daysPerWeek: 4, weekend: false, durationMonths: 6,
+    wage: 205, location: '台南善化', region: '台南', daysPerWeek: 4, weekend: false, durationMonths: 6,
     deadline: inDays(24), requirements: req({ degree: '大學以上', departments: ['生科', '生物', '化學'], minGrade: 3 }), requiredSkills: ['實驗操作'], bonusSkills: ['Excel'], benefits: ['供午餐'],
   },
   {
     companyName: '微光電商有限公司', title: '電商營運實習生', category: '電商',
     description: '上架商品、維護賣場頁面，分析銷售數據並規劃促銷活動。',
-    wage: 190, location: '新北三重', region: '新北', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '新北三重', region: '新北', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(7), requirements: req(), requiredSkills: ['Excel', '社群經營'], bonusSkills: ['Google Analytics'], benefits: ['員工購物折扣'],
   },
   {
     companyName: '旅人誌旅遊股份有限公司', title: '旅遊行程企劃實習生', category: '行銷企劃',
     description: '規劃主題旅遊行程、撰寫行程文案，協助旅展活動。',
-    wage: 185, location: '台中北區', region: '台中', daysPerWeek: 3, weekend: true, durationMonths: 3,
+    wage: 200, location: '台中北區', region: '台中', daysPerWeek: 3, weekend: true, durationMonths: 3,
     deadline: inDays(13), requirements: req({ languages: ['中文', '英文'] }), requiredSkills: ['文案', 'Canva'], bonusSkills: [], benefits: ['員工旅遊'],
   },
   {
@@ -165,43 +165,43 @@ export function demoJobs(inDays) {
   {
     companyName: '島嶼永續顧問有限公司', title: 'ESG 研究實習生', category: '研究',
     description: '蒐集企業永續資料、整理碳排數據，協助撰寫永續報告書。',
-    wage: 190, location: '遠端', region: '遠端', daysPerWeek: 2, weekend: false, durationMonths: 6,
+    wage: 200, location: '遠端', region: '遠端', daysPerWeek: 2, weekend: false, durationMonths: 6,
     deadline: inDays(19), requirements: req(), requiredSkills: ['Excel', '簡報'], bonusSkills: [], benefits: ['遠端工作'],
   },
   {
     companyName: '光譜數位行銷有限公司', title: 'SEO 行銷實習生', category: '行銷企劃',
     description: '研究關鍵字、優化網站文章，並用 Google Analytics 追蹤流量。',
-    wage: 190, location: '高雄苓雅', region: '高雄', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '高雄苓雅', region: '高雄', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(17), requirements: req(), requiredSkills: ['SEO', 'Google Analytics'], bonusSkills: ['文案'], benefits: ['彈性工時'],
   },
   {
     companyName: '鐵道物流股份有限公司', title: '採購助理實習生', category: '行政',
     description: '比價詢價、建立採購單，追蹤供應商交期並整理報表。',
-    wage: 183, location: '桃園蘆竹', region: '桃園', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 196, location: '桃園蘆竹', region: '桃園', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(21), requirements: req(), requiredSkills: ['Excel'], bonusSkills: [], benefits: ['交通補助'],
   },
   {
     companyName: '晴天法律事務所', title: '法務助理實習生', category: '法務',
     description: '協助整理案件卷宗、檢索判決與法規，草擬簡單文書。',
-    wage: 190, location: '台北中正', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 6,
+    wage: 200, location: '台北中正', region: '台北', daysPerWeek: 3, weekend: false, durationMonths: 6,
     deadline: inDays(3), requirements: req({ degree: '大學以上', departments: ['法律'], minGrade: 3 }), requiredSkills: ['文書處理'], bonusSkills: [], benefits: ['正職優先錄取'],
   },
   {
     companyName: '浪潮媒體股份有限公司', title: '新聞編輯實習生', category: '媒體',
     description: '撰寫與編輯網路新聞稿，製作社群短影音與新聞圖卡。',
-    wage: 190, location: '台北內湖', region: '台北', daysPerWeek: 3, weekend: true, durationMonths: 3,
+    wage: 200, location: '台北內湖', region: '台北', daysPerWeek: 3, weekend: true, durationMonths: 3,
     deadline: inDays(9), requirements: req(), requiredSkills: ['文案', '剪輯'], bonusSkills: ['Canva'], benefits: ['作品署名'],
   },
   {
     companyName: '方塊建築設計有限公司', title: '室內設計助理實習生', category: '設計',
     description: '繪製平面配置圖與 3D 模型，協助材料挑選與現場丈量。',
-    wage: 185, location: '台中南屯', region: '台中', daysPerWeek: 4, weekend: false, durationMonths: 6,
+    wage: 200, location: '台中南屯', region: '台中', daysPerWeek: 4, weekend: false, durationMonths: 6,
     deadline: inDays(26), requirements: req({ departments: ['室內設計', '建築'] }), requiredSkills: ['AutoCAD', 'SketchUp'], bonusSkills: [], benefits: ['供午餐'],
   },
   {
     companyName: '好味餐飲集團股份有限公司', title: '門市營運實習生', category: '餐飲',
     description: '參與門市營運與排班，分析銷售數據並提出改善方案。',
-    wage: 183, location: '台南東區', region: '台南', daysPerWeek: 4, weekend: true, durationMonths: 6,
+    wage: 196, location: '台南東區', region: '台南', daysPerWeek: 4, weekend: true, durationMonths: 6,
     deadline: inDays(12), requirements: req(), requiredSkills: ['Excel'], bonusSkills: [], benefits: ['員工餐', '三節獎金'],
   },
   ];

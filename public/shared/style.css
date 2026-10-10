@@ -107,3 +107,40 @@ textarea.input { min-height: 80px; resize: vertical; }
 .spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -3px; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .empty { text-align: center; color: var(--muted); padding: 48px 16px; }
+
+/* 頂部列的文字按鈕（篩選、用瀏覽器開啟）*/
+.top-btn {
+  display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: #fff;
+  border-radius: 999px; padding: 7px 14px; font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.top-btn:active { background: var(--bg); }
+.btn.danger { background: var(--red); border-color: var(--red); color: #fff; }
+.btn .eta, .eta { font-size: 12px; font-weight: 500; opacity: .85; margin-left: 4px; }
+
+/* 置中對話框 */
+.modal-backdrop { position: fixed; inset: 0; z-index: 80; background: rgba(0,0,0,.4); display: grid; place-items: center; padding: 16px; }
+.modal { background: #fff; border-radius: 16px; padding: 20px; width: 100%; max-width: 440px; max-height: 90vh; overflow: auto; animation: up .18s ease-out; }
+.modal h3 { margin: 0 0 8px; font-size: 18px; }
+.modal p { margin: 0 0 12px; line-height: 1.6; font-size: 14px; }
+.modal-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+
+/* 上傳檔案按鈕 */
+.upload-pick { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.upload-pick input[type=file] { display: none; }
+.upload-pick .file-name { font-size: 13px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+
+/* 詳情頁：資訊方塊與條件列表 */
+.detail-head { display: flex; gap: 12px; align-items: center; margin-bottom: 14px; }
+.detail-head .avatar { width: 52px; height: 52px; border-radius: 14px; background: var(--green-soft); color: var(--green-dark); display: grid; place-items: center; font-weight: 700; flex: none; }
+.detail-head h3 { margin: 0 0 4px; font-size: 18px; }
+.tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+.tile { background: var(--bg); border-radius: 12px; padding: 10px 12px; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.tile .v { font-weight: 700; margin-top: 2px; font-size: 15px; }
+.kv { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; font-size: 14px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.chip.req { background: var(--red-soft); color: var(--red); }
+.chip.bonus { background: var(--amber-soft); color: var(--amber); }
+.notice { background: var(--amber-soft); color: var(--amber); border-radius: 10px; padding: 8px 12px; font-size: 13px; margin-bottom: 12px; }
+.spinner.dark { border-color: var(--green); border-right-color: transparent; }

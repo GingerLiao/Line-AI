@@ -125,3 +125,75 @@ export const splitList = (s) => String(s || '').split(/[,，、\n]/).map((x) => 
 
 function safeGet(k, store = 'localStorage') { try { return window[store].getItem(k); } catch { return null; } }
 function safeSet(k, v, store = 'localStorage') { try { window[store].setItem(k, v); } catch {} }
+
+// 年級數字 → 文字（0 或沒填 → 年級未填寫）
+export function gradeLabel(n) {
+  return ['', '大一', '大二', '大三', '大四', '碩一', '碩二', '博士班'][Number(n) || 0] || '年級未填寫';
+}
+
+// 在 LINE 裡面開啟時，提供「用瀏覽器開啟」（方便切去其他聊天室複製東西）
+export const inLineApp = () => Boolean(window.liff?.isInClient?.());
+export function openExternal(url = location.href) {
+  if (inLineApp()) liff.openWindow({ url, external: true });
+  else window.open(url, '_blank');
+}
+
+// AI 處理中：按鈕上顯示經過秒數與預估時間，讓使用者知道還在跑
+//   const stop = aiWaiting(button, 'AI 解析中'); ...; stop();
+export function aiWaiting(el, label = 'AI 處理中', estimate = '約 10–30 秒') {
+  const original = el.innerHTML;
+  const start = Date.now();
+  el.disabled = true;
+  const render = () => {
+    const s = Math.floor((Date.now() - start) / 1000);
+    el.innerHTML = `<span class="spinner"></span> ${label}… ${s} 秒<small class="eta">（${estimate}）</small>`;
+  };
+  render();
+  const timer = setInterval(render, 1000);
+  return () => {
+    clearInterval(timer);
+    el.disabled = false;
+    el.innerHTML = original;
+  };
+}
+
+// 上傳前處理：照片縮到 1600px 內並轉成 JPEG（手機照片常常好幾 MB，也可能是 HEIC）
+export async function prepareUpload(file) {
+  if (!file || !file.type.startsWith('image/')) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.85));
+    return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file; // 瀏覽器不支援就直接上傳原檔
+  }
+}
+
+// 檔案選擇器接受的格式：PDF、文字檔、照片（iPhone 會出現「照片圖庫／拍照／選擇檔案」）
+export const UPLOAD_ACCEPT = '.pdf,.txt,image/*';
+
+// 確認對話框（取代瀏覽器內建的 confirm），回傳 Promise<boolean>
+export function confirmDialog({ title, message = '', ok = '確定', danger = false }) {
+  return new Promise((resolve) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'modal-backdrop';
+    wrap.innerHTML = `
+      <div class="modal" role="dialog" aria-modal="true">
+        <h3>${esc(title)}</h3>
+        ${message ? `<p class="muted">${message}</p>` : ''}
+        <div class="modal-foot">
+          <button class="btn" data-no>取消</button>
+          <button class="btn ${danger ? 'danger' : 'primary'}" data-yes>${esc(ok)}</button>
+        </div>
+      </div>`;
+    const done = (v) => { wrap.remove(); resolve(v); };
+    wrap.onclick = (e) => { if (e.target === wrap || e.target.closest('[data-no]')) done(false); };
+    wrap.querySelector('[data-yes]').onclick = () => done(true);
+    document.body.append(wrap);
+  });
+}

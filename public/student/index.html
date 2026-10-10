@@ -14,35 +14,37 @@
 <body>
   <header class="topbar">
     <h1><span class="logo">💼</span><span id="page-title">找實習</span></h1>
-    <button class="icon-btn" id="open-filter" title="篩選條件">⚙︎</button>
+    <button class="top-btn hidden" id="open-external" title="用瀏覽器開啟">↗<span>瀏覽器</span></button>
+    <button class="top-btn" id="open-filter" title="篩選條件">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>篩選</span>
+    </button>
   </header>
 
   <!-- 分頁 1：滑卡找實習 -->
   <main id="tab-swipe" class="tab">
     <div id="deck" class="deck"></div>
     <div class="actions" id="actions">
-      <div><button class="round skip" data-act="skip" title="跳過">✕</button><small>跳過</small></div>
-      <div><button class="round save" data-act="save" title="收藏・提醒">🔔</button><small>收藏・提醒</small></div>
-      <div><button class="round apply" data-act="apply" title="投遞">➤</button><small>投遞</small></div>
+      <div><button class="round skip" data-act="skip" title="跳過">✕</button><small class="g-skip">← 左滑跳過</small></div>
+      <div><button class="round save" data-act="save" title="收藏・提醒">🔔</button><small class="g-save">↑ 上滑收藏</small></div>
+      <div><button class="round apply" data-act="apply" title="投遞">➤</button><small class="g-apply">右滑投遞 →</small></div>
     </div>
-    <p class="hint">← 左滑跳過　↑ 上滑收藏　右滑投遞 →</p>
   </main>
 
-  <!-- 分頁 2：履歷 -->
+  <!-- 分頁 2：收藏與投遞（順序跟官方帳號的圖文選單一致）-->
+  <main id="tab-saved" class="tab hidden">
+    <div id="saved-list" class="list"></div>
+  </main>
+
+  <!-- 分頁 3：履歷 -->
   <main id="tab-resumes" class="tab hidden">
     <div id="resume-list" class="list"></div>
     <div class="pad"><button class="btn block" id="new-resume">＋ 建立新履歷</button></div>
   </main>
 
-  <!-- 分頁 3：收藏與投遞 -->
-  <main id="tab-saved" class="tab hidden">
-    <div id="saved-list" class="list"></div>
-  </main>
-
   <nav class="tabbar">
     <button data-tab="swipe" class="on">🃏<span>找實習</span></button>
-    <button data-tab="resumes">📄<span>我的履歷</span></button>
     <button data-tab="saved">🔖<span>收藏・投遞</span></button>
+    <button data-tab="resumes">📄<span>我的履歷</span></button>
   </nav>
 
   <div id="sheet-root"></div>

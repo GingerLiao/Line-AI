@@ -22,12 +22,30 @@ function createFirestoreDb() {
 
     const withId = (doc) => (doc.exists ? { id: doc.id, ...doc.data() } : null);
 
+    // 職缺每次滑卡都要整批讀（含語意向量），在記憶體快取 60 秒，有寫入就清掉
+    const CACHED = new Set(['jobs']);
+    const cache = new Map();
+    const all = async (col) => {
+      const hit = cache.get(col);
+      if (hit && Date.now() - hit.at < 60_000) return hit.rows;
+      const rows = (await store.collection(col).get()).docs.map(withId);
+      cache.set(col, { at: Date.now(), rows });
+      return rows;
+    };
+    const touch = (col) => cache.delete(col);
+    const matches = (row, where) => Object.entries(where).every(([k, v]) => row[k] === v);
+
     return {
       kind: 'firestore',
       async get(col, id) {
+        if (CACHED.has(col)) {
+          const row = (await all(col)).find((r) => r.id === id);
+          return row ? { ...row } : withId(await store.collection(col).doc(id).get());
+        }
         return withId(await store.collection(col).doc(id).get());
       },
       async find(col, where = {}) {
+        if (CACHED.has(col)) return (await all(col)).filter((r) => matches(r, where)).map((r) => ({ ...r }));
         let q = store.collection(col);
         for (const [k, v] of Object.entries(where)) q = q.where(k, '==', v);
         const snap = await q.get();
@@ -35,14 +53,17 @@ function createFirestoreDb() {
       },
       async add(col, data) {
         const ref = await store.collection(col).add(data);
+        touch(col);
         return { id: ref.id, ...data };
       },
       async set(col, id, data) {
         await store.collection(col).doc(id).set(data);
+        touch(col);
         return { id, ...data };
       },
       async update(col, id, patch) {
         await store.collection(col).doc(id).update(patch);
+        touch(col);
         return this.get(col, id);
       },
     };
