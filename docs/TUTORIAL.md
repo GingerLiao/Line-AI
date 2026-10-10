@@ -277,8 +277,7 @@ const res = await client.chat.completions.create({
 > Endpoint URL 必須是 **https**。第 6 關用 ngrok 會拿到 https 網址，現在可以先隨便填，等等再回來改。
 
 > 📐 **Size 怎麼選？** Full（全螢幕）最適合滑卡；Tall（約 8 成高）會露出後面的聊天室；Compact 只有半螢幕，滑卡會太擠。
-> 隨時可以在 LIFF 分頁改，不用改程式。需要切去別的聊天室複製文字時，
-> 學生端右上角有「↗ 瀏覽器」按鈕，可以改用手機瀏覽器開啟。
+> 隨時可以在 LINE Developers → LINE Login channel → **LIFF** 分頁 → 點 LIFF app → **Edit** → **Size** 修改，按 Update 立即生效，不用改程式。
 
 ### 5-3 填入 .env
 
@@ -367,6 +366,7 @@ ngrok 會給你一個 `https://xxxx.ngrok-free.app` 的網址：
 3. **Environment Variables**：把 `.env` 的值逐一加入（`PORT`、`PUBLIC_BASE_URL` 先不用填），另外新增：
    - `GOOGLE_APPLICATION_CREDENTIALS` = `/etc/secrets/serviceAccount.json`
    - `CRON_SECRET` = 一串自己想的長密碼（英數字）
+   - `FILE_SECRET` = 另一串長密碼（履歷附件網址的簽章用；不設也能用，但每次重新部署後，舊的附件連結要重新整理頁面才打得開）
 4. **Secret Files** → 新增檔名 `serviceAccount.json`，內容貼上 Firebase 金鑰檔的全部文字
 5. **Deploy**，完成後拿到 `https://xxx.onrender.com`
 6. 兩個 LIFF Endpoint URL 改成 `https://xxx.onrender.com/student/`、`/company/`；Render 加上 `PUBLIC_BASE_URL`

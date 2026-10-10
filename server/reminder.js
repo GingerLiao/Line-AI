@@ -18,7 +18,7 @@ export async function sendDeadlineReminders() {
       title: `⏰ 收藏的職缺${left === 0 ? '今天' : ` ${left} 天後`}截止`,
       body: `${job.companyName}「${job.title}」報名截止 ${job.deadline}，別錯過！`,
       buttonLabel: '立即投遞',
-      url: liffUrl('student', '?tab=saved'),
+      url: liffUrl('student', `?tab=saved&job=${job.id}`),
     }));
     await db.update('swipes', swipe.id, { reminded: true });
     sent++;

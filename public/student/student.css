@@ -31,16 +31,33 @@ body { padding-bottom: 72px; min-height: 100vh; }
 .stamp.skip { right: 20px; color: var(--red); transform: rotate(12deg); }
 .stamp.save { left: 50%; top: auto; bottom: 40px; transform: translateX(-50%); color: var(--amber); }
 
-.actions { display: flex; justify-content: center; align-items: flex-end; gap: 18px; text-align: center; }
-.actions > div { display: flex; flex-direction: column; align-items: center; }
-.actions small { display: block; font-size: 12px; font-weight: 700; margin-top: 8px; padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
-.actions small.g-skip { color: var(--red); background: var(--red-soft); }
-.actions small.g-save { color: var(--amber); background: var(--amber-soft); }
-.actions small.g-apply { color: var(--green-dark); background: var(--green-soft); }
-.round { width: 58px; height: 58px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,.06); }
-.round.skip { color: var(--red); }
-.round.save { color: var(--amber); }
-.round.apply { background: var(--green); border-color: var(--green); color: #fff; width: 64px; height: 64px; }
+/* 滑卡動作列：左紅（跳過）、中黃（收藏）、右綠（投遞） */
+.swipe-bar {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto minmax(0, 1fr); align-items: center; gap: 8px;
+  margin: 14px 12px 0; padding: 10px 12px; border-radius: 999px;
+  background: linear-gradient(90deg, #fde9ea 0%, #fff 32%, #fff 68%, #e6f7ec 100%);
+  box-shadow: 0 6px 24px rgba(0,0,0,.06), inset 0 0 0 1px rgba(0,0,0,.03);
+}
+.swipe-bar::before { /* 中間往上凸起的黃色區塊 */
+  content: ''; position: absolute; left: 50%; top: -22px; width: 118px; height: 80px; transform: translateX(-50%);
+  border-radius: 60px 60px 0 0; background: radial-gradient(ellipse at 50% 70%, #fff4d6 0%, #fffaf0 55%, rgba(255,255,255,0) 72%);
+  z-index: 0; pointer-events: none;
+}
+.swipe-bar > * { position: relative; z-index: 1; }
+.sb-side { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.sb-side.left { color: #e5484d; align-items: flex-start; }
+.sb-side.right { color: #05a647; align-items: flex-end; }
+.sb-btn {
+  width: 56px; height: 56px; border-radius: 50%; border: 0; background: #fff; display: grid; place-items: center;
+  box-shadow: 0 4px 14px rgba(0,0,0,.10); transition: transform .12s ease;
+}
+.sb-btn:active { transform: scale(.92); }
+.sb-btn.skip { color: #e5484d; }
+.sb-btn.apply { color: #06c755; }
+.sb-btn.save { font-size: 26px; width: 62px; height: 62px; }
+.sb-center { display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: -26px; font-size: 12.5px; white-space: nowrap; font-weight: 700; color: #b7791f; }
+.sb-chev { color: #e7b23c; }
+@media (max-width: 360px) { .sb-side span { font-size: 11px; } .sb-side svg { width: 34px; } .sb-btn { width: 50px; height: 50px; } }
 #empty-restore { margin-bottom: 10px; }
 
 /* 底部分頁列 */
@@ -91,3 +108,32 @@ input[type=range] { width: 100%; accent-color: var(--green); }
 .sheet-foot { position: sticky; bottom: -22px; background: #fff; padding: 10px 0 4px; margin-top: 8px; }
 
 @media (max-width: 360px) { .top-btn span { display: none; } }
+.place-pick { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; margin-bottom: 10px; }
+.place-pick .input { padding: 9px 10px; }
+
+/* 履歷：可新增的經歷項目 */
+.entry { position: relative; background: var(--bg); border-radius: 12px; padding: 12px 12px 4px; margin-bottom: 10px; }
+.entry .input { background: #fff; }
+.entry-del { position: absolute; top: 6px; right: 6px; border: 0; background: none; color: var(--muted); font-size: 16px; padding: 4px 8px; }
+.entry-file { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.link-btn { border: 0; background: none; color: var(--green-dark); font-weight: 600; padding: 0; cursor: pointer; font-size: 13px; }
+.file-chip { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; color: var(--ink); text-decoration: none; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.add-entry { width: 100%; border-style: dashed; color: var(--green-dark); margin-bottom: 12px; }
+.empty-sec { margin: 0 0 10px; }
+
+/* 職缺詳情 */
+.job-hero { background: linear-gradient(135deg, var(--green-soft), #fff); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.job-hero .detail-head { margin-bottom: 10px; }
+.job-hero .avatar { background: #fff; }
+.tiles.four { grid-template-columns: repeat(4, 1fr); }
+.tiles.four .tile { text-align: center; padding: 8px 4px; }
+.tiles.four .v { font-size: 14px; }
+.para { margin: 0 0 4px; line-height: 1.7; }
+.bullets { margin: 0; padding-left: 20px; line-height: 1.8; }
+.map-link { color: var(--green-dark); font-size: 13px; white-space: nowrap; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 4px; }
+.timeline li { position: relative; padding: 0 0 14px 24px; }
+.timeline li > span.muted { display: block; margin-top: 2px; }
+.timeline li::before { content: ''; position: absolute; left: 3px; top: 6px; width: 10px; height: 10px; border-radius: 50%; background: var(--green); }
+.timeline li:not(:last-child)::after { content: ''; position: absolute; left: 7px; top: 18px; bottom: 0; width: 2px; background: #cdeedb; }
+.timeline .mode { display: inline-block; font-size: 12px; background: var(--bg); border-radius: 6px; padding: 1px 6px; margin-left: 4px; font-weight: 500; }

@@ -5,8 +5,10 @@ import { db } from '../db.js';
 import { parseJob, summarizeApplicant } from '../ai.js';
 import { fileToInput, isEmptyInput } from '../extract.js';
 import { evaluate } from '../matching.js';
+import { parseAddress } from '../../public/shared/taiwan.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
 import { withEmbedding, stripEmbedding } from '../embeddings.js';
+import { withFileUrls } from '../files.js';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
 export const companyRouter = Router();
@@ -38,6 +40,8 @@ companyRouter.post('/jobs', async (req, res) => {
     wage: Number(data.wage) || 0,
     daysPerWeek: Number(data.daysPerWeek) || 0,
     durationMonths: Number(data.durationMonths) || 0,
+    headcount: Number(data.headcount) || 0,
+    ...parseAddress(data.location), // 從地址辨識縣市與行政區，給學生用地區篩選
     companyId: req.user.userId,
     updatedAt: new Date().toISOString(),
   };
@@ -71,7 +75,7 @@ companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
   const rows = await Promise.all(apps.map(async (app) => {
     const resume = await db.get('resumes', app.resumeId);
     if (!resume) return null;
-    return { ...app, resume: stripEmbedding(resume), evaluation: evaluate(resume, job) };
+    return { ...app, resume: withFileUrls(stripEmbedding(resume)), evaluation: evaluate(resume, job) };
   }));
   res.json(rows.filter(Boolean).sort((a, b) => b.evaluation.score - a.evaluation.score));
 });
@@ -132,7 +136,7 @@ companyRouter.post('/applications/:id/status', async (req, res) => {
       title: '你收到面試邀請！🎉',
       body: lines.join('\n'),
       buttonLabel: '查看詳情',
-      url: liffUrl('student', '?tab=saved'),
+      url: liffUrl('student', `?tab=saved&job=${job.id}`),
     }));
   } else if (status === 'rejected') {
     const job = await db.get('jobs', app.jobId);

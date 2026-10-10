@@ -5,7 +5,7 @@
 .layout { display: grid; grid-template-columns: 260px 1fr; min-height: calc(100vh - 57px); }
 .side { border-right: 1px solid var(--line); background: #fff; padding: 16px; }
 .side-title { font-size: 13px; color: var(--muted); margin: 18px 0 8px; }
-.main { padding: 24px; max-width: 920px; width: 100%; }
+.main { padding: 24px 32px; width: 100%; min-width: 0; }
 @media (max-width: 760px) {
   .layout { grid-template-columns: 1fr; }
   .side { border-right: 0; border-bottom: 1px solid var(--line); }
@@ -27,7 +27,8 @@
 .form-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 8px; }
 
 /* 應徵者 */
-.applicants { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+.applicants { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 16px; align-items: start; }
+#app-list { position: sticky; top: 72px; max-height: calc(100vh - 90px); overflow: auto; }
 @media (max-width: 760px) { .applicants { grid-template-columns: 1fr; } }
 .app-link { display: block; width: 100%; text-align: left; border: 1px solid transparent; background: none; border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; }
 .app-link.on { background: #e3ebff; border-color: #c5d4ff; }
@@ -93,7 +94,7 @@
 .stat small { font-size: 13px; color: var(--muted); font-weight: 500; }
 .bars-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
 .bars-title { font-size: 13px; font-weight: 700; margin-bottom: 8px; }
-.bar-row { display: grid; grid-template-columns: 96px 1fr 28px; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
+.bar-row { display: grid; grid-template-columns: minmax(90px, 38%) 1fr 28px; align-items: center; gap: 8px; font-size: 13px; padding: 3px 0; }
 .bar-row:hover { background: var(--bg); border-radius: 6px; }
 .bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bar-track { height: 10px; background: #eef0f2; border-radius: 5px; overflow: hidden; }
@@ -103,3 +104,24 @@
   .stats { grid-template-columns: 1fr 1fr; }
   .bars-grid { grid-template-columns: 1fr; }
 }
+.place-hint { display: block; margin-top: 6px; font-size: 12px; }
+.place-hint.ok { color: var(--green-dark); }
+.place-hint.warn { color: var(--amber); }
+.stage { display: grid; grid-template-columns: 28px 1.2fr 100px 2fr 36px; gap: 8px; align-items: center; margin-bottom: 8px; }
+.stage-no { width: 24px; height: 24px; border-radius: 50%; background: var(--green-soft); color: var(--green-dark); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.add-stage { border-style: dashed; color: var(--green-dark); margin-bottom: 14px; }
+@media (max-width: 760px) { .stage { grid-template-columns: 24px 1fr 90px 32px; } .stage [data-k=detail] { grid-column: 2 / 4; } }
+
+/* 企業端：應徵者履歷分區 */
+.resume-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 6px; }
+.r-card { background: var(--bg); border-radius: 12px; padding: 14px 16px; }
+.r-card h4, .r-block h4 { margin: 0 0 10px; font-size: 15px; }
+.r-block { border-top: 1px solid var(--line); padding: 16px 0 6px; margin-top: 10px; }
+.r-block p { margin: 0; line-height: 1.7; font-size: 14px; }
+.lang { display: inline-block; margin-right: 12px; }
+.entry-view { border-left: 3px solid #cdeedb; padding: 2px 0 2px 12px; margin-bottom: 12px; display: grid; gap: 4px; }
+.entry-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.entry-top .date { margin-left: auto; }
+.entry-links { display: flex; gap: 14px; font-size: 13px; }
+.entry-links a { color: var(--green-dark); }
+@media (max-width: 1100px) { .resume-grid { grid-template-columns: 1fr; } }

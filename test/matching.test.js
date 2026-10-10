@@ -31,6 +31,15 @@ test('職業類別、每週 3 天以內、其他地區', () => {
   assert.equal(passesFilters({ ...j, region: '其他' }, { regions: ['其他'] }), true);
 });
 
+test('地區：縣市＋行政區，舊職缺從地址辨識', () => {
+  const j = { ...job, location: '台北南港' };
+  assert.equal(passesFilters(j, { locations: [{ city: '台北市', district: '' }] }), true);
+  assert.equal(passesFilters(j, { locations: [{ city: '台北市', district: '南港區' }] }), true);
+  assert.equal(passesFilters(j, { locations: [{ city: '台北市', district: '大安區' }] }), false);
+  assert.equal(passesFilters(j, { locations: [{ city: '新北市', district: '' }, { city: '台北市', district: '南港區' }] }), true);
+  assert.equal(passesFilters({ ...job, city: '遠端', district: '' }, { locations: [{ city: '遠端', district: '' }] }), true);
+});
+
 test('年級不足會被標記，技能大小寫不敏感', () => {
   const resume = { degree: '大學', department: '資管系', grade: 2, skills: ['sql', 'Python', 'Excel'], languages: [{ name: '中文' }] };
   const ev = evaluate(resume, job);

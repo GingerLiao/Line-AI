@@ -9,6 +9,7 @@ import { pushMessage, linkCard, liffUrl } from '../line.js';
 import { rankJobs } from '../ranking.js';
 import { embeddingModel } from '../ai.js';
 import { withEmbedding, stripEmbedding } from '../embeddings.js';
+import { cleanResumeFiles, withFileUrls } from '../files.js';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
 export const studentRouter = Router();
@@ -20,7 +21,7 @@ const ownResume = async (req, id) => {
 
 // ---------- 履歷 ----------
 studentRouter.get('/resumes', async (req, res) => {
-  res.json((await db.find('resumes', { ownerId: req.user.userId })).map(stripEmbedding));
+  res.json((await db.find('resumes', { ownerId: req.user.userId })).map((r) => withFileUrls(stripEmbedding(r))));
 });
 
 // AI 智慧建立履歷：上傳檔案（PDF、文字檔、照片）或貼上文字 → 回傳結構化草稿（不存檔，讓學生確認後再存）
@@ -31,15 +32,15 @@ studentRouter.post('/resumes/parse', upload.single('file'), async (req, res) => 
 });
 
 studentRouter.post('/resumes', async (req, res) => {
-  const { id, ...data } = req.body;
-  const { embedding, ...clean } = data;
+  const { id, embedding, aiFailed, ...data } = req.body;
+  const clean = await cleanResumeFiles(data, req.user.userId); // 附件只能是自己上傳的
   // 存檔時順便算語意向量，給滑卡排序用
   const row = await withEmbedding({ ...clean, ownerId: req.user.userId, updatedAt: new Date().toISOString() }, 'resume');
   if (id) {
     if (!(await ownResume(req, id))) return res.status(404).json({ error: '找不到履歷' });
-    return res.json(stripEmbedding(await db.set('resumes', id, row)));
+    return res.json(withFileUrls(stripEmbedding(await db.set('resumes', id, row))));
   }
-  res.json(stripEmbedding(await db.add('resumes', row)));
+  res.json(withFileUrls(stripEmbedding(await db.add('resumes', row))));
 });
 
 // ---------- 求職條件 ----------

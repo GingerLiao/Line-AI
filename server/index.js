@@ -7,6 +7,7 @@ import { requireUser } from './line.js';
 import { studentRouter } from './routes/student.js';
 import { companyRouter } from './routes/company.js';
 import { startReminderCron, sendDeadlineReminders } from './reminder.js';
+import { studentFilesRouter, publicFilesRouter } from './files.js';
 
 const app = express();
 app.use(express.json({ limit: '1mb' }));
@@ -22,7 +23,9 @@ app.get('/api/config', (req, res) => {
   });
 });
 
+app.use('/api/student/files', requireUser, studentFilesRouter); // 履歷附件上傳
 app.use('/api/student', requireUser, studentRouter);
+app.use('/files', publicFilesRouter); // 附件下載（簽名網址）
 app.use('/api/company', requireUser, companyRouter);
 
 // 健康檢查：給外部定時服務每 10 分鐘呼叫一次，避免 Render 免費方案休眠

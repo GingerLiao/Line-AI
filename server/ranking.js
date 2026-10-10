@@ -12,6 +12,7 @@ import { evaluate, daysUntil } from './matching.js';
 export function jobText(job) {
   return [
     job.title, job.category, job.description,
+    ...(job.responsibilities || []),
     `必備技能：${(job.requiredSkills || []).join('、')}`,
     `加分條件：${(job.bonusSkills || []).join('、')}`,
   ].filter(Boolean).join('\n');
@@ -21,7 +22,9 @@ export function resumeText(resume) {
   return [
     resume.title, resume.department,
     `技能：${(resume.skills || []).join('、')}`,
-    ...(resume.experiences || []).map((e) => `${e.title}：${e.description || ''}`),
+    resume.about,
+    // 競賽證照、專案作品、活動經歷（舊版履歷是 experiences）
+    ...['awards', 'projects', 'activities', 'experiences'].flatMap((k) => (resume[k] || []).map((e) => `${e.title}${e.role ? `（${e.role}）` : ''}：${e.description || ''}`)),
   ].filter(Boolean).join('\n');
 }
 

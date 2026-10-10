@@ -31,6 +31,9 @@ export const config = {
   // 外部排程（例如 cron-job.org）觸發截止提醒用的密碼；有設定就不啟動程式內建的排程
   cronSecret: env.CRON_SECRET || '',
 
+  // 履歷附件簽名網址用的密碼（不設定也能用，但伺服器重開後舊網址會失效）
+  fileSecret: env.FILE_SECRET || '',
+
   reminder: {
     cron: env.REMINDER_CRON || '0 9 * * *',
     daysBefore: Number(env.REMINDER_DAYS_BEFORE || 3),

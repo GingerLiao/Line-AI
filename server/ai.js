@@ -67,17 +67,20 @@ async function tryAi(aiFn, fallbackFn) {
 
 // ---------------- 履歷 ----------------
 const RESUME_SCHEMA = `{
-  "name": "姓名",
-  "school": "學校",
-  "department": "科系，例如 資訊管理系",
+  "name": "姓名（只放人名）",
+  "school": "學校名稱（只放校名，例如 輔仁大學）",
+  "department": "科系（只放系名，例如 企業管理學系）",
   "degree": "高中職 | 專科 | 大學 | 碩士 | 博士",
-  "grade": 年級數字，大一=1、大四=4、碩一=5,
+  "grade": 年級數字：大一=1…大四=4、碩一=5、碩二=6、博一=8；已畢業=99；看不出來=0,
   "gpa": "GPA 或空字串",
   "graduation": "預計畢業年月，例如 2028/06",
+  "about": "自我介紹或自傳，60–150 字（個性、興趣、求職目標放這裡，不要放進 school）",
   "skills": ["技能，每個技能一個短詞，例如 SQL、Python、Excel"],
   "languages": [{"name": "中文", "level": "母語"}],
-  "experiences": [{"title": "經歷名稱", "year": "2025", "description": "一句話描述成果"}],
-  "links": ["作品集或 GitHub 網址"],
+  "awards": [{"title": "競賽或證照名稱", "role": "名次或成績，例如 第二名、多益 850", "date": "2025/05", "description": "一句話說明", "link": ""}],
+  "projects": [{"title": "專案或作品名稱", "role": "擔任角色", "date": "2025/03–2025/06", "description": "做了什麼、成果", "link": "作品網址"}],
+  "activities": [{"title": "社團、志工、工讀、幹部等經歷", "role": "職位", "date": "2024/09–2025/06", "description": "一句話描述成果", "link": ""}],
+  "links": ["個人作品集網站或 GitHub 網址"],
   "contact": {"email": "", "phone": "", "lineId": ""}
 }`;
 
@@ -98,10 +101,16 @@ const JOB_SCHEMA = `{
   "companyName": "公司全名",
   "title": "職缺名稱，例如 數據分析實習生",
   "category": "工作類別，例如 數據分析",
-  "description": "工作內容，一到兩句",
+  "description": "工作內容摘要，一到兩句",
+  "companyIntro": "公司簡介，一到兩句（沒寫就空字串）",
+  "responsibilities": ["工作內容條列，每項一句"],
+  "workHours": "上班時段，例如 週一至週五擇三天 09:30–18:30",
+  "headcount": 招募人數數字，沒寫就 0,
+  "startDate": "到職時間，例如 錄取後兩週內",
+  "interviewStages": [{"name": "階段名稱，例如 書面審查、一面、技術測驗", "mode": "線上 | 實體 | 電話 | 作業", "detail": "一句話說明"}],
+  "applyMaterials": ["應徵需準備的資料，例如 履歷、作品集、成績單"],
   "wage": 時薪數字（月薪請除以 160 換算成時薪）,
-  "location": "地點，例如 台北南港",
-  "region": "台北 | 新北 | 桃園 | 台中 | 台南 | 高雄 | 遠端 | 其他",
+  "location": "完整工作地址，要包含縣市與行政區，例如 台北市南港區經貿二路 66 號；遠端工作就寫 遠端",
   "daysPerWeek": 每週天數數字,
   "weekend": 是否假日上班 true/false,
   "durationMonths": 實習月數數字,
@@ -239,7 +248,10 @@ function fallbackParseResume(text) {
     graduation: pick(text, /(\d{4}\/\d{2})\s*畢業/),
     skills: findSkills(text),
     languages: [{ name: '中文', level: '母語' }, ...(/英文|多益|TOEIC/i.test(text) ? [{ name: '英文', level: pick(text, /(多益\s*\d+)/) }] : [])],
-    experiences: [],
+    about: '',
+    awards: [],
+    projects: [],
+    activities: [],
     links: text.match(/https?:\/\/\S+/g) || [],
     contact: {
       email: pick(text, /([\w.+-]+@[\w.-]+)/),
@@ -251,7 +263,6 @@ function fallbackParseResume(text) {
 
 function fallbackParseJob(text) {
   const wage = Number(pick(text, /時薪\s*(\d+)/)) || Math.round(Number(pick(text, /月薪\s*(\d+)/)) / 160) || 0;
-  const regions = ['台北', '新北', '桃園', '台中', '台南', '高雄', '遠端'];
   const deadline = text.match(/(\d{1,2})\s*[\/月]\s*(\d{1,2})\s*日?\s*截止|截止[日：:\s]*(\d{1,2})\s*[\/月]\s*(\d{1,2})/);
   let deadlineStr = '';
   if (deadline) {
@@ -267,8 +278,7 @@ function fallbackParseJob(text) {
     category: pick(text, /(?:類別|職類)[:：]\s*(\S+)/),
     description: pick(text, /工作內容[:：]\s*([^\n]+)/),
     wage,
-    location: pick(text, /地點[:：]\s*(\S+)/),
-    region: regions.find((r) => text.includes(r)) || '其他',
+    location: pick(text, /(?:地點|地址)[:：]\s*(\S+)/),
     daysPerWeek: Number(pick(text, /每週\s*(\d)\s*天/)) || 0,
     weekend: /假日/.test(text),
     durationMonths: Number(pick(text, /(\d+)\s*個月/)) || 0,
@@ -315,6 +325,6 @@ function fallbackAdvice(resume, job, ev) {
 }
 
 function fallbackSummary(resume) {
-  const exp = (resume.experiences || [])[0];
+  const exp = [...(resume.projects || []), ...(resume.activities || []), ...(resume.experiences || [])][0];
   return `熟 ${(resume.skills || []).slice(0, 3).join('、') || '—'}${exp ? `；做過${exp.title}` : ''}。`;
 }

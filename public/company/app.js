@@ -2,8 +2,8 @@ import {
   initAuth, api, profile, logout, isFriend, $, $$, esc, toast, splitList,
   gradeLabel, aiWaiting, prepareUpload, confirmDialog, UPLOAD_ACCEPT,
 } from '/shared/api.js';
+import { parseAddress, placeLabel } from '/shared/taiwan.js';
 
-const REGIONS = ['台北', '新北', '桃園', '台中', '台南', '高雄', '遠端', '其他'];
 const CATEGORIES = ['數據分析', '軟體開發', '設計', '行銷企劃', '業務', '財務會計', '人力資源', '行政', '法務', '研究', '產品企劃', '影音製作', '媒體', '電商', '教育', '遊戲企劃', '餐飲'];
 const STATUS = {
   pending: { text: '待處理', cls: '' },
@@ -12,6 +12,7 @@ const STATUS = {
   rejected: { text: '不適合', cls: 'bad' },
 };
 const FINAL = ['interview', 'rejected'];
+const STAGE_MODES = ['線上', '實體', '電話', '作業'];
 
 let jobs = [];
 let currentJobId = null;
@@ -108,7 +109,9 @@ function fillJobForm(j = {}) {
       <label class="field"><span>職業類別（學生用來篩選）</span><input class="input" name="category" list="cat-list" placeholder="選擇或自行輸入" value="${esc(j.category)}">
         <datalist id="cat-list">${CATEGORIES.map((c) => `<option value="${c}">`).join('')}</datalist></label>
     </div>
-    <label class="field"><span>工作內容</span><textarea class="input" name="description">${esc(j.description)}</textarea></label>
+    <label class="field"><span>公司簡介（一到兩句，讓學生認識你們）</span><textarea class="input" name="companyIntro" style="min-height:60px" placeholder="例如：專做零售業數據分析的新創，團隊 35 人。">${esc(j.companyIntro)}</textarea></label>
+    <label class="field"><span>職缺摘要（顯示在滑卡卡片上，一到兩句）</span><textarea class="input" name="description" style="min-height:60px">${esc(j.description)}</textarea></label>
+    <label class="field"><span>詳細工作內容（一行一項）</span><textarea class="input" name="responsibilities" placeholder="每週整理營運報表\n用 SQL 撈資料、清理資料">${esc((j.responsibilities || []).join('\n'))}</textarea></label>
     <div class="section-title">工作條件</div>
     <div class="grid4">
       <label class="field"><span>時薪（元）</span><input class="input" name="wage" type="number" min="0" placeholder="基本工資 196" value="${esc(j.wage)}"></label>
@@ -117,9 +120,14 @@ function fillJobForm(j = {}) {
       <label class="field"><span>報名截止日</span><input class="input" name="deadline" type="date" value="${esc(j.deadline)}"></label>
     </div>
     <div class="grid4">
-      <label class="field" style="grid-column: span 2"><span>工作地址</span><input class="input" name="location" placeholder="例如：台北市南港區經貿二路 66 號" value="${esc(j.location)}"></label>
-      <label class="field"><span>縣市（依地址自動帶入）</span><select class="input" name="region">${REGIONS.map((x) => `<option ${j.region === x ? 'selected' : ''}>${x}</option>`).join('')}</select></label>
+      <label class="field" style="grid-column: span 3"><span>工作地址（遠端工作請填「遠端」）</span><input class="input" name="location" placeholder="例如：台北市南港區經貿二路 66 號" value="${esc(j.location)}">
+        <small class="place-hint" id="place-hint"></small></label>
       <label class="field"><span>假日上班</span><select class="input" name="weekend"><option value="">否</option><option value="1" ${j.weekend ? 'selected' : ''}>是</option></select></label>
+    </div>
+    <div class="grid4">
+      <label class="field" style="grid-column: span 2"><span>上班時段</span><input class="input" name="workHours" placeholder="例如：週一至週五擇三天 09:30–18:30" value="${esc(j.workHours)}"></label>
+      <label class="field"><span>招募人數</span><input class="input" name="headcount" type="number" min="0" value="${esc(j.headcount || '')}"></label>
+      <label class="field"><span>到職時間</span><input class="input" name="startDate" placeholder="例如：錄取後兩週內" value="${esc(j.startDate)}"></label>
     </div>
     <div class="section-title">要求條件</div>
     <div class="grid4">
@@ -131,22 +139,50 @@ function fillJobForm(j = {}) {
     <label class="field"><span>必備技能（逗號分隔）</span><input class="input" name="requiredSkills" value="${esc((j.requiredSkills || []).join(', '))}"></label>
     <label class="field"><span>加分條件（逗號分隔）</span><input class="input" name="bonusSkills" value="${esc((j.bonusSkills || []).join(', '))}"></label>
     <label class="field"><span>公司福利（逗號分隔）</span><input class="input" name="benefits" value="${esc((j.benefits || []).join(', '))}"></label>
+    <div class="section-title">應徵流程</div>
+    <div id="stages"></div>
+    <button type="button" class="btn add-stage" id="add-stage">＋ 新增面試階段</button>
+    <label class="field"><span>應備資料（逗號分隔）</span><input class="input" name="applyMaterials" placeholder="履歷, 作品集, 成績單" value="${esc((j.applyMaterials || ['履歷']).join(', '))}"></label>
     <div class="form-foot">
       ${j.id ? '<button type="button" class="btn" id="cancel-edit">取消</button>' : ''}
       <button class="btn primary">${j.id ? '✓ 儲存變更' : '✓ 確認送出，開始媒合'}</button>
     </div>`;
 
-  // 打地址時自動選縣市（台北市 → 台北、新北市 → 新北…）
-  form.location.oninput = (e) => {
-    const v = e.target.value.replace(/臺/g, '台');
-    const hit = REGIONS.find((x) => x !== '其他' && v.includes(x));
-    if (hit) form.region.value = hit;
+  // 地址裡就有縣市與行政區，即時顯示系統辨識的結果（學生用地區篩選時就是看這個）
+  const showPlace = () => {
+    const place = parseAddress(form.location.value);
+    const hint = $('#place-hint');
+    hint.className = `place-hint ${place.city ? 'ok' : 'warn'}`;
+    hint.textContent = !form.location.value.trim() ? ''
+      : place.city ? `✓ 學生篩選地區：${placeLabel(place)}${place.district || place.city === '遠端' ? '' : '（加上行政區會更精準）'}`
+        : '⚠️ 認不出縣市，請寫成「台北市大安區…」，學生才能用地區篩選到';
   };
+  form.location.oninput = showPlace;
+  showPlace();
+
+  // 面試流程：可以有好幾個階段（書面審查 → 一面 → 二面…）
+  let stages = (j.interviewStages || []).map((x) => ({ ...x }));
+  if (!stages.length) stages = [{ name: '面談', mode: '實體', detail: '' }];
+  const collectStages = () => $$('.stage', form).forEach((el, i) => $$('[data-k]', el).forEach((inp) => (stages[i][inp.dataset.k] = inp.value.trim())));
+  const renderStages = () => {
+    $('#stages').innerHTML = stages.map((st, i) => `
+      <div class="stage">
+        <span class="stage-no">${i + 1}</span>
+        <input class="input" data-k="name" placeholder="階段名稱，例如：書面審查、一面" value="${esc(st.name)}">
+        <select class="input" data-k="mode">${STAGE_MODES.map((m) => `<option ${st.mode === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
+        <input class="input" data-k="detail" placeholder="說明，例如：人資視訊 20 分鐘" value="${esc(st.detail)}">
+        <button type="button" class="icon-btn" data-rm="${i}" title="刪除">✕</button>
+      </div>`).join('');
+    $$('[data-rm]', form).forEach((b) => (b.onclick = () => { collectStages(); stages.splice(Number(b.dataset.rm), 1); renderStages(); }));
+  };
+  renderStages();
+  $('#add-stage').onclick = () => { collectStages(); stages.push({ name: '', mode: '實體', detail: '' }); renderStages(); };
   if (j.id) $('#cancel-edit').onclick = () => showJob(j.id);
 
   form.onsubmit = async (e) => {
     e.preventDefault();
     const f = Object.fromEntries(new FormData(form));
+    collectStages();
     const btn = $('.form-foot .primary', form);
     btn.disabled = true;
     try {
@@ -156,12 +192,16 @@ function fillJobForm(j = {}) {
           id: j.id,
           companyName: f.companyName, title: f.title, category: f.category, description: f.description,
           wage: f.wage, daysPerWeek: f.daysPerWeek, durationMonths: f.durationMonths, deadline: f.deadline,
-          location: f.location, region: f.region, weekend: Boolean(f.weekend),
+          location: f.location, weekend: Boolean(f.weekend),
           requirements: {
             degree: f.degree, departments: splitList(f.departments), minGrade: Number(f.minGrade) || 0,
             experience: r.experience || '不拘', languages: splitList(f.languages),
           },
           requiredSkills: splitList(f.requiredSkills), bonusSkills: splitList(f.bonusSkills), benefits: splitList(f.benefits),
+          companyIntro: f.companyIntro, workHours: f.workHours, headcount: f.headcount, startDate: f.startDate,
+          responsibilities: f.responsibilities.split('\n').map((x) => x.trim()).filter(Boolean),
+          interviewStages: stages.filter((st) => st.name),
+          applyMaterials: splitList(f.applyMaterials),
         },
       });
       toast(j.id ? '已儲存變更' : '職缺已進入卡池，開始媒合！');
@@ -229,7 +269,7 @@ async function showJob(jobId) {
       const st = STATUS[a.status] || STATUS.pending;
       return `<button class="app-link ${a.id === selected ? 'on' : ''} ${a.status === 'rejected' ? 'dim' : ''}" data-app="${esc(a.id)}">
         <b>${esc(r.name || '未填姓名')} ${a.status !== 'pending' ? `<em class="mini ${st.cls}">${st.text}</em>` : ''}</b>
-        <span class="${failed.length ? 'warn' : ''}">${esc((r.department || '').replace(/系$/, '') || '科系未填')}・${gradeLabel(r.grade)}・${failed.length ? `${failed.map((c) => c.label).join('、')}未達` : '條件符合'}</span>
+        <span class="${failed.length ? 'warn' : ''}">${esc((r.department || '').replace(/系$/, '') || '科系未填')}・${gradeLabel(r.grade, r.degree)}・${failed.length ? `${failed.map((c) => c.label).join('、')}未達` : '條件符合'}</span>
       </button>`;
     }).join('');
     $$('[data-app]').forEach((b) => (b.onclick = () => { renderList(b.dataset.app); renderDetail(apps.find((a) => a.id === b.dataset.app)); }));
@@ -245,7 +285,7 @@ async function showJob(jobId) {
       <div class="person">
         <div class="avatar">${esc((r.name || '?').slice(0, 1))}</div>
         <div class="grow"><h2>${esc(r.name || '未填姓名')} ${a.status !== 'pending' ? `<span class="status-pill ${st.cls}">${st.text}</span>` : ''}</h2>
-          <div class="muted">${esc(r.school)} ${esc(r.department)}・${gradeLabel(r.grade)}</div></div>
+          <div class="muted">${[r.school, r.department, gradeLabel(r.grade, r.degree)].filter(Boolean).map(esc).join('・')}</div></div>
         <div class="score"><b>${ev.score}</b><span>符合度</span></div>
       </div>
       ${final ? resultHtml(a) : `
@@ -267,15 +307,29 @@ async function showJob(jobId) {
           ${missing.map((s) => `<span class="tag warn">${esc(s)}・缺</span>`).join('')}
         </div>
       </div>
-      <div class="info-grid">
-        <div><div class="section-title">教育背景</div><div class="small">${esc(r.school)} ${esc(r.department)}<br><span class="muted">${r.graduation ? `預計 ${esc(r.graduation)} 畢業` : ''}${r.gpa ? `・GPA ${esc(r.gpa)}` : ''}</span></div></div>
-        <div><div class="section-title">語言</div><div class="small">${(r.languages || []).map((l) => `${esc(l.name)}${l.level ? `（${esc(l.level)}）` : ''}`).join('<br>') || '—'}</div></div>
+      <div class="resume-grid">
+        <section class="r-card">
+          <h4>🎓 學歷</h4>
+          <dl class="kv">
+            <dt>學校</dt><dd>${esc(r.school || '—')}</dd>
+            <dt>科系</dt><dd>${esc(r.department || '—')}</dd>
+            <dt>年級</dt><dd>${esc(r.degree || '')} ${gradeLabel(r.grade, r.degree)}</dd>
+            ${r.graduation ? `<dt>預計畢業</dt><dd>${esc(r.graduation)}</dd>` : ''}
+            ${r.gpa ? `<dt>GPA</dt><dd>${esc(r.gpa)}</dd>` : ''}
+          </dl>
+        </section>
+        <section class="r-card">
+          <h4>🛠 技能與語言</h4>
+          <div class="chips">${(r.skills || []).map((x) => `<span class="chip ${hasSkillIn(x, job) ? 'on' : ''}">${esc(x)}</span>`).join('') || '<span class="muted small">—</span>'}</div>
+          <div class="small" style="margin-top:10px">${(r.languages || []).map((l) => `<span class="lang">${esc(l.name)}${l.level ? `・${esc(l.level)}` : ''}</span>`).join('') || '<span class="muted">—</span>'}</div>
+        </section>
       </div>
-      <div class="section-title">技能</div>
-      <div class="chips">${(r.skills || []).map((s) => `<span class="chip">${esc(s)}</span>`).join('')}</div>
-      <div class="section-title">專案與經歷</div>
-      ${(r.experiences || []).map((x) => `<div class="exp"><b class="small">${esc(x.title)}</b> <span class="muted small">${esc(x.year)}</span><div class="small muted">${esc(x.description)}</div></div>`).join('') || '<p class="muted small">—</p>'}
-      ${r.links?.length ? `<div class="section-title">作品集・連結</div>${r.links.map((l) => `<div class="small"><a href="${esc(/^https?:\/\//.test(l) ? l : '#')}" target="_blank" rel="noopener">${esc(l)}</a></div>`).join('')}` : ''}`;
+      ${r.about ? `<section class="r-block"><h4>✍️ 自我介紹</h4><p>${esc(r.about)}</p></section>` : ''}
+      ${resumeSections(r).map(([title, items]) => `
+      <section class="r-block"><h4>${title}</h4>
+        ${items.length ? items.map(entryHtml).join('') : '<p class="muted small">—</p>'}
+      </section>`).join('')}
+      ${r.links?.length ? `<section class="r-block"><h4>🔗 作品集・連結</h4>${r.links.map((l) => `<div class="small"><a href="${esc(safeUrl(l))}" target="_blank" rel="noopener">${esc(l)}</a></div>`).join('')}</section>` : ''}`;
 
     // AI 摘要：點開才算，算過就存起來
     if (!summaries[a.id] && !a.aiSummary) {
@@ -408,8 +462,35 @@ function analyticsHtml(job, apps) {
     <div class="bars-grid">
       ${bars('技能覆蓋（有此技能的人數）', skills)}
       ${bars('科系分布', tally(apps.map((a) => a.resume.department || '未填')))}
-      ${bars('年級分布', tally(apps.map((a) => gradeLabel(a.resume.grade))))}
+      ${bars('年級分布', tally(apps.map((a) => gradeLabel(a.resume.grade, a.resume.degree))))}
       ${bars('處理進度', byStatus)}
     </div>
   </section>`;
+}
+
+// =============== 履歷檢視的小工具 ===============
+function safeUrl(u) {
+  return /^https?:\/\//.test(u || '') ? u : '#';
+}
+function hasSkillIn(skill, job) {
+  return [...(job.requiredSkills || []), ...(job.bonusSkills || [])].some((x) => x.toLowerCase() === String(skill).toLowerCase());
+}
+
+// 競賽證照、專案作品、活動經歷（舊版履歷只有 experiences，放在活動經歷）
+function resumeSections(r) {
+  const legacy = (r.experiences || []).map((e) => ({ title: e.title, date: e.year, description: e.description }));
+  const activities = r.activities?.length ? r.activities : legacy;
+  return [['🏆 競賽成績・證照', r.awards || []], ['💡 專案作品', r.projects || []], ['🌱 其他活動經歷', activities]];
+}
+
+function entryHtml(x) {
+  return `
+    <div class="entry-view">
+      <div class="entry-top"><b>${esc(x.title)}</b>${x.role ? `<span class="tag">${esc(x.role)}</span>` : ''}<span class="muted small date">${esc(x.date || '')}</span></div>
+      ${x.description ? `<div class="small">${esc(x.description)}</div>` : ''}
+      ${x.link || x.file ? `<div class="entry-links">
+        ${x.link ? `<a href="${esc(safeUrl(x.link))}" target="_blank" rel="noopener">🔗 連結</a>` : ''}
+        ${x.file?.url ? `<a href="${esc(x.file.url)}" target="_blank" rel="noopener">📄 ${esc(x.file.name)}</a>` : ''}
+      </div>` : ''}
+    </div>`;
 }

@@ -126,10 +126,8 @@ export const splitList = (s) => String(s || '').split(/[,，、\n]/).map((x) => 
 function safeGet(k, store = 'localStorage') { try { return window[store].getItem(k); } catch { return null; } }
 function safeSet(k, v, store = 'localStorage') { try { window[store].setItem(k, v); } catch {} }
 
-// 年級數字 → 文字（0 或沒填 → 年級未填寫）
-export function gradeLabel(n) {
-  return ['', '大一', '大二', '大三', '大四', '碩一', '碩二', '博士班'][Number(n) || 0] || '年級未填寫';
-}
+// 年級文字（大二、碩一、已畢業…）
+export { gradeLabel, GRADE_OPTIONS, fitGrade, GRADUATED } from './grades.js';
 
 // 在 LINE 裡面開啟時，提供「用瀏覽器開啟」（方便切去其他聊天室複製東西）
 export const inLineApp = () => Boolean(window.liff?.isInClient?.());

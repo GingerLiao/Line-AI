@@ -3,6 +3,12 @@
 //  2. evaluate：拿履歷跟職缺的要求條件逐項比對，算出分數
 // AI 只負責「把文字變結構化」與「寫建議」，判斷對錯交給這裡，避免 AI 亂判。
 
+import { parseAddress } from '../public/shared/taiwan.js';
+import { gradeLabel } from '../public/shared/grades.js';
+
+// 職缺所在縣市／行政區：存檔時算好；舊資料沒有就從地址現場辨識
+export const jobPlace = (job) => (job.city ? { city: job.city, district: job.district || '' } : parseAddress(job.location));
+
 const DEGREE_RANK = { 高中職: 1, 專科: 2, 大學: 3, 碩士: 4, 博士: 5 };
 
 export function degreeRank(text = '') {
@@ -15,9 +21,13 @@ const hasSkill = (skills, target) => skills.some((s) => norm(s) === norm(target)
 
 // ---------- 1. 硬條件篩選 ----------
 export function passesFilters(job, prefs = {}) {
-  const { regions = [], schedules = [], categories = [], minWage = 0, minDuration = 0 } = prefs;
+  const { locations = [], regions = [], schedules = [], categories = [], minWage = 0, minDuration = 0 } = prefs;
 
-  if (regions.length && !regions.includes(job.region || '其他')) return false;
+  // 地區：縣市＋行政區（行政區空白代表整個縣市）
+  if (locations.length) {
+    const place = jobPlace(job);
+    if (!locations.some((l) => l.city === place.city && (!l.district || l.district === place.district))) return false;
+  } else if (regions.length && !regions.includes(job.region || '其他')) return false; // 舊版設定（只有六都）
   if (categories.length && !categories.includes(job.category)) return false;
   if (minWage && job.wage < minWage) return false;
   if (minDuration && job.durationMonths < minDuration) return false;
@@ -68,7 +78,7 @@ export function evaluate(resume, job) {
       key: 'grade',
       label: '年級',
       ok: grade >= req.minGrade,
-      detail: `此職缺限大${gradeText(req.minGrade)}以上，你目前大${gradeText(grade)}`,
+      detail: `此職缺限${gradeLabel(req.minGrade)}以上，你目前${grade ? gradeLabel(grade, resume.degree) : '未填年級'}`,
     });
   }
 
@@ -101,8 +111,6 @@ export function evaluate(resume, job) {
   return { checks, matchedSkills, missingSkills, bonusMatched, bonusMissing, score: Math.min(100, score) };
 }
 
-const GRADE_TEXT = ['?', '一', '二', '三', '四', '五', '六'];
-const gradeText = (n) => GRADE_TEXT[n] || String(n);
 
 export function today() {
   // 以台北時間計算今天日期 YYYY-MM-DD
