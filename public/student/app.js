@@ -746,15 +746,20 @@ async function loadSaved() {
       ${i.note ? `<div class="muted">${esc(i.note)}</div>` : ''}
     </div>` : '');
 
-  list.innerHTML = rows.map((r) => `
-      <div class="item tappable" data-open="${esc(r.id)}"><div class="item-row">
+  // 收藏的職缺可以像 iPhone 一樣往左滑，露出右邊的「刪除」（取消收藏）
+  list.innerHTML = rows.map((r) => {
+    const item = `
+      <div class="item tappable ${r.action === 'save' ? 'swipe-content' : ''}" data-open="${esc(r.id)}"><div class="item-row">
         <div class="avatar">${esc(r.job.companyName.slice(0, 2))}</div>
         <div class="grow"><h4>${esc(r.job.title)}</h4><div class="muted small">${esc(r.job.companyName)}・截止 ${mmdd(r.job.deadline)}</div><div style="margin-top:6px">${statusTag(r)}</div></div>
-        ${r.action === 'save' ? `<div class="row-acts">
-          ${canApply(r) ? `<button class="btn primary" data-apply="${esc(r.id)}">投遞</button>` : ''}
-          <button class="link-btn muted-link" data-unsave="${esc(r.id)}">取消收藏</button>
-        </div>` : '<span class="chev">›</span>'}
-      </div>${r.status === 'interview' ? interviewHtml(r.interview) : ''}</div>`).join('');
+        ${canApply(r) ? `<button class="btn primary" data-apply="${esc(r.id)}">投遞</button>` : '<span class="chev">›</span>'}
+      </div>${r.status === 'interview' ? interviewHtml(r.interview) : ''}</div>`;
+    return r.action === 'save'
+      ? `<div class="swipe-row"><button class="swipe-del" data-unsave="${esc(r.id)}" tabindex="-1">🗑<span>刪除</span></button>${item}</div>`
+      : item;
+  }).join('');
+  $$('.swipe-content', list).forEach(bindSwipeToDelete);
+  if (rows.some((r) => r.action === 'save') && !safeHint()) toast('小技巧：收藏的職缺往左滑可以刪除');
 
   const applyFromSaved = async (row) => {
     const resumeId = await pickResume(row.job);
@@ -779,7 +784,9 @@ async function loadSaved() {
   };
   $$('[data-unsave]', list).forEach((b) => (b.onclick = (e) => {
     e.stopPropagation();
-    unsave(rows.find((r) => r.id === b.dataset.unsave));
+    const rowEl = b.closest('.swipe-row');
+    rowEl.classList.add('removing'); // 先播放收合動畫
+    setTimeout(() => unsave(rows.find((r) => r.id === b.dataset.unsave)), 220);
   }));
   $$('[data-apply]', list).forEach((b) => (b.onclick = (e) => {
     e.stopPropagation();
@@ -787,6 +794,7 @@ async function loadSaved() {
   }));
   // 點整張卡片：打開職缺詳情
   $$('[data-open]', list).forEach((el) => (el.onclick = () => {
+    if (el.dataset.swiped) return; // 剛滑開／滑回時不要打開詳情
     const row = rows.find((r) => r.id === el.dataset.open);
     const body = openJobDetail(row.job, {
       statusHtml: `<div style="margin-bottom:12px">${statusTag(row)}</div>${row.status === 'interview' ? interviewHtml(row.interview) : ''}`,
@@ -804,6 +812,65 @@ async function loadSaved() {
     openJobId = null;
     if (row) $(`[data-open="${row.id}"]`, list)?.click();
   }
+}
+
+// =============== 清單左滑刪除（像 iPhone）===============
+const DEL_W = 88; // 刪除按鈕寬度
+let openSwipe = null; // 目前滑開的那一列，同時只開一列
+
+function closeSwipe(el = openSwipe) {
+  if (!el) return;
+  el.style.transition = 'transform .2s ease';
+  el.style.transform = '';
+  if (openSwipe === el) openSwipe = null;
+}
+
+function bindSwipeToDelete(el) {
+  let startX = 0, startY = 0, base = 0, dx = 0, mode = null; // mode：null 還沒判斷、'x' 橫滑、'y' 捲動
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button > 0) return;
+    if (openSwipe && openSwipe !== el) closeSwipe();
+    startX = e.clientX; startY = e.clientY; dx = 0; mode = null;
+    base = openSwipe === el ? -DEL_W : 0;
+    el.style.transition = 'none';
+  });
+  el.addEventListener('pointermove', (e) => {
+    if (!startX) return;
+    const mx = e.clientX - startX, my = e.clientY - startY;
+    if (!mode && Math.abs(mx) + Math.abs(my) > 8) mode = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+    if (mode !== 'x') return;
+    el.setPointerCapture?.(e.pointerId);
+    dx = mx;
+    const x = Math.min(0, base + dx); // 只能往左
+    el.style.transform = `translateX(${x < -DEL_W ? -DEL_W + (x + DEL_W) * 0.35 : x}px)`; // 超過按鈕寬度時有阻力
+  });
+  const end = () => {
+    if (!startX) return;
+    startX = 0;
+    if (mode !== 'x') { el.style.transition = ''; return; }
+    el.dataset.swiped = '1';
+    setTimeout(() => delete el.dataset.swiped, 50);
+    el.style.transition = 'transform .2s ease';
+    if (base + dx < -DEL_W / 2) {
+      el.style.transform = `translateX(-${DEL_W}px)`;
+      openSwipe = el;
+    } else closeSwipe(el);
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+// 點清單其他地方就把滑開的列收回去
+document.addEventListener('pointerdown', (e) => {
+  if (openSwipe && !openSwipe.parentElement.contains(e.target)) closeSwipe();
+});
+
+// 「往左滑可以刪除」的提示只顯示一次
+function safeHint() {
+  try {
+    if (localStorage.getItem('hint-swipe-delete')) return true;
+    localStorage.setItem('hint-swipe-delete', '1');
+  } catch {}
+  return false;
 }
 
 // =============== 啟動（放在檔案最後，上面的函式與常數都已經定義好）===============
