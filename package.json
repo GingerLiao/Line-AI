@@ -9,7 +9,8 @@
     "seed": "node server/seed.js",
     "test": "node --test",
     "embed": "node server/embed.js",
-    "models": "node server/list-models.js"
+    "models": "node server/list-models.js",
+    "seed:demo": "node server/seed-demo-jobs.js"
   },
   "repository": {
     "type": "git",
