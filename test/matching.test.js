@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluate, passesFilters, degreeRank } from '../server/matching.js';
+import { evaluate, passesFilters, degreeRank, matchesKeyword } from '../server/matching.js';
 
 const job = {
   region: '台北', wage: 200, daysPerWeek: 3, weekend: false, durationMonths: 6, deadline: '2999-12-31',
@@ -51,4 +51,12 @@ test('年級不足會被標記，技能大小寫不敏感', () => {
 test('完全符合的分數高於年級不符', () => {
   const base = { degree: '大學', department: '資管系', skills: ['SQL', 'Python', 'Excel'], languages: [{ name: '中文' }] };
   assert.ok(evaluate({ ...base, grade: 3 }, job).score > evaluate({ ...base, grade: 2 }, job).score);
+});
+
+test('關鍵字搜尋：多個關鍵字都要出現，不分大小寫', () => {
+  const j = { title: '社群行銷實習生', companyName: '橘子圈', category: '行銷企劃', location: '臺北市大安區', requiredSkills: ['Canva'] };
+  assert.equal(matchesKeyword(j, ''), true);
+  assert.equal(matchesKeyword(j, '行銷'), true);
+  assert.equal(matchesKeyword(j, 'canva 台北'), true);
+  assert.equal(matchesKeyword(j, '行銷 高雄'), false);
 });

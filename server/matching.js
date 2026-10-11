@@ -45,6 +45,18 @@ export function passesFilters(job, prefs = {}) {
   return true;
 }
 
+// ---------- 關鍵字搜尋 ----------
+// 空白分隔多個關鍵字，每個都要出現（例如「行銷 台北」）；比對職稱、公司、類別、內容、技能、地點、福利
+export function matchesKeyword(job, q = '') {
+  const words = String(q).toLowerCase().replace(/臺/g, '台').split(/\s+/).filter(Boolean).slice(0, 5);
+  if (!words.length) return true;
+  const text = [
+    job.title, job.companyName, job.category, job.description, job.companyIntro, job.location, job.city, job.district,
+    ...(job.responsibilities || []), ...(job.requiredSkills || []), ...(job.bonusSkills || []), ...(job.benefits || []),
+  ].filter(Boolean).join(' ').toLowerCase().replace(/臺/g, '台');
+  return words.every((w) => text.includes(w));
+}
+
 // ---------- 2. 履歷 vs 職缺 逐項比對 ----------
 export function evaluate(resume, job) {
   const req = job.requirements || {};

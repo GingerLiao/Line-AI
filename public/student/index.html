@@ -14,6 +14,9 @@
 <body>
   <header class="topbar">
     <h1><span class="logo">💼</span><span id="page-title">找實習</span></h1>
+    <button class="top-btn" id="open-search" title="關鍵字搜尋">
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5L20 20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg><span>搜尋</span>
+    </button>
     <button class="top-btn" id="open-filter" title="篩選條件">
       <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="6" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="12" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="18" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>篩選</span>
     </button>
@@ -21,6 +24,13 @@
 
   <!-- 分頁 1：滑卡找實習 -->
   <main id="tab-swipe" class="tab">
+    <!-- 關鍵字搜尋列 -->
+    <form class="search-bar hidden" id="search-bar" role="search">
+      <input type="search" id="search-input" class="input" placeholder="職缺、公司、技能…" maxlength="50" enterkeyhint="search">
+      <button class="btn primary" type="submit">搜尋</button>
+      <button class="btn" type="button" id="search-cancel">取消</button>
+    </form>
+    <div class="search-chip hidden" id="search-chip"></div>
     <div id="deck" class="deck"></div>
     <!-- 動作列：按鈕或直接滑卡都可以 -->
     <div class="swipe-bar" id="actions">

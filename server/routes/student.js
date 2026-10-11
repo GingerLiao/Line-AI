@@ -4,7 +4,7 @@ import multer from 'multer';
 import { db } from '../db.js';
 import { parseResume, careerAdvice } from '../ai.js';
 import { fileToInput, isEmptyInput } from '../extract.js';
-import { evaluate, passesFilters } from '../matching.js';
+import { evaluate, passesFilters, matchesKeyword } from '../matching.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
 import { rankJobs } from '../ranking.js';
 import { embeddingModel } from '../ai.js';
@@ -78,7 +78,10 @@ async function cardPool(me, prefs) {
 studentRouter.get('/cards', async (req, res) => {
   const me = req.user.userId;
   const prefs = (await db.get('preferences', me)) || {};
-  const { swipes, allJobs, candidates } = await cardPool(me, prefs);
+  const { swipes, allJobs, candidates: pool } = await cardPool(me, prefs);
+  // 關鍵字搜尋（篩選旁的「搜尋」）：在符合篩選條件的職缺中再找一次
+  const q = String(req.query.q || '').slice(0, 50);
+  const candidates = q ? pool.filter((j) => matchesKeyword(j, q)) : pool;
 
   // 先篩掉硬條件（上面），再依「規則 + AI 語意 + 滑卡偏好 + 時效」排序（server/ranking.js）
   const resume = prefs.smartSort && prefs.resumeId ? await ownResume(req, prefs.resumeId) : null;

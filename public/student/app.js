@@ -4,7 +4,7 @@ import {
 } from '/shared/api.js';
 import { CITIES, DISTRICTS, REMOTE, placeLabel, parseAddress } from '/shared/taiwan.js';
 
-const state = { cards: [], resumes: [], prefs: {} };
+const state = { cards: [], resumes: [], prefs: {}, q: '' };
 const SCHEDULES = ['每週3天以內', '每週3天以上', '平日', '假日'];
 const WAGES = [0, 200, 250, 300, 350, 400].map((v) => ({ v, t: v ? `${v} 以上` : '不限' }));
 const DURATIONS = [{ v: 0, t: '不限' }, { v: 3, t: '3 個月以上' }, { v: 6, t: '6 個月以上' }];
@@ -30,6 +30,7 @@ function switchTab(tab) {
   $$('.tab').forEach((t) => t.classList.toggle('hidden', t.id !== `tab-${tab}`));
   $('#page-title').textContent = TITLES[tab];
   $('#open-filter').classList.toggle('hidden', tab !== 'swipe');
+  $('#open-search').classList.toggle('hidden', tab !== 'swipe');
   if (tab === 'swipe') loadCards();
   if (tab === 'resumes') renderResumes();
   if (tab === 'saved') loadSaved();
@@ -63,7 +64,7 @@ async function loadCards() {
   $('#deck').innerHTML = '<div class="card skeleton"><div class="sk sk-head"></div><div class="sk"></div><div class="sk"></div><div class="sk short"></div></div>';
   $('#actions').classList.add('hidden');
   try {
-    state.cards = await api('/student/cards');
+    state.cards = await api(`/student/cards${state.q ? `?q=${encodeURIComponent(state.q)}` : ''}`);
   } catch (err) {
     state.cards = [];
     toast(err.message);
@@ -71,11 +72,41 @@ async function loadCards() {
   renderDeck();
 }
 
+// =============== 關鍵字搜尋 ===============
+function toggleSearchBar(show) {
+  $('#search-bar').classList.toggle('hidden', !show);
+  if (show) {
+    $('#search-input').value = state.q;
+    $('#search-input').focus();
+  }
+}
+
+// 設定關鍵字並重新載入卡片；空字串＝清除搜尋
+function setSearch(q) {
+  state.q = q;
+  const chip = $('#search-chip');
+  chip.classList.toggle('hidden', !q);
+  chip.innerHTML = q ? `<span class="chip-text">🔍 搜尋「${esc(q)}」</span><button type="button" aria-label="清除搜尋">✕</button>` : '';
+  if (q) {
+    $('button', chip).onclick = () => setSearch('');
+    $('.chip-text', chip).onclick = () => toggleSearchBar(true);
+  }
+  $('#open-search').classList.toggle('on', Boolean(q));
+  $('#search-bar').classList.add('hidden'); // 搜尋後收起輸入列，只留下標籤（點標籤可修改）
+  loadCards();
+}
+
 function renderDeck() {
   const deck = $('#deck');
   const [top, next] = state.cards;
   $('#actions').classList.toggle('hidden', !top);
   if (!top) {
+    if (state.q) {
+      deck.innerHTML = `<div class="empty">找不到「${esc(state.q)}」相關的職缺 🔍<br><span class="small">試試其他關鍵字，或放寬篩選條件</span><br><br>
+        <button class="btn primary" id="empty-clear">清除搜尋</button></div>`;
+      $('#empty-clear').onclick = () => setSearch('');
+      return;
+    }
     deck.innerHTML = `<div class="empty">目前沒有符合條件的新職缺 🙌<br><br>
       <button class="btn primary hidden" id="empty-restore"></button>
       <button class="btn" id="empty-filter">調整篩選條件</button></div>`;
@@ -879,6 +910,13 @@ await initAuth('student');
 
 $$('.tabbar button').forEach((b) => (b.onclick = () => switchTab(b.dataset.tab)));
 $('#open-filter').onclick = () => openFilter();
+$('#open-search').onclick = () => toggleSearchBar(true);
+$('#search-cancel').onclick = () => { toggleSearchBar(false); if (state.q) setSearch(''); };
+$('#search-bar').onsubmit = (e) => {
+  e.preventDefault();
+  $('#search-input').blur(); // 收起手機鍵盤
+  setSearch($('#search-input').value.trim());
+};
 $('#new-resume').onclick = () => openResumeEditor();
 $$('#actions [data-act]').forEach((b) => (b.onclick = () => decide(b.dataset.act)));
 
