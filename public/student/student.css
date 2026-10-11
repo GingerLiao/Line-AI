@@ -156,3 +156,10 @@ input[type=range] { width: 100%; accent-color: var(--green); }
 .topbar .top-btn + .top-btn { margin-left: 2px; }
 @media (max-width: 380px) { .top-btn { padding: 7px 10px; } }
 .search-chip .chip-text { cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 收藏・投遞分類 */
+.saved-seg { display: flex; gap: 6px; margin: 14px 16px 0; padding: 4px; background: #eceeec; border-radius: 12px; }
+.saved-seg button { flex: 1; border: 0; background: none; border-radius: 9px; padding: 8px 4px; font-size: 14px; font-weight: 600; color: var(--muted); display: flex; align-items: center; justify-content: center; gap: 5px; white-space: nowrap; }
+.saved-seg button em { font-style: normal; font-size: 12px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #dfe3e0; color: var(--muted); }
+.saved-seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.saved-seg button.on em { background: var(--green); color: #fff; }

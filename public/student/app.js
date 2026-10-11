@@ -4,7 +4,13 @@ import {
 } from '/shared/api.js';
 import { CITIES, DISTRICTS, REMOTE, placeLabel, parseAddress } from '/shared/taiwan.js';
 
-const state = { cards: [], resumes: [], prefs: {}, q: '' };
+const state = { cards: [], resumes: [], prefs: {}, q: '', savedFilter: 'all' };
+const SAVED_FILTERS = [
+  { key: 'all', label: '全部', match: () => true, empty: '' },
+  { key: 'save', label: '收藏', match: (r) => r.action === 'save', empty: '沒有收藏中的職缺<br>滑卡時往上滑就能收藏' },
+  { key: 'applied', label: '已投遞', match: (r) => r.action === 'apply' && (!r.status || r.status === 'pending'), empty: '沒有等待回覆的投遞' },
+  { key: 'replied', label: '已回覆', match: (r) => r.action === 'apply' && r.status && r.status !== 'pending', empty: '企業還沒有回覆<br>有回覆時會用 LINE 通知你' },
+];
 const SCHEDULES = ['每週3天以內', '每週3天以上', '平日', '假日'];
 const WAGES = [0, 200, 250, 300, 350, 400].map((v) => ({ v, t: v ? `${v} 以上` : '不限' }));
 const DURATIONS = [{ v: 0, t: '不限' }, { v: 3, t: '3 個月以上' }, { v: 6, t: '6 個月以上' }];
@@ -756,11 +762,24 @@ async function loadSaved() {
     $('#saved-retry').onclick = loadSaved;
     return;
   }
+  $('#saved-seg').classList.toggle('hidden', !rows.length);
   if (!rows.length) {
     list.innerHTML = '<div class="empty">還沒有收藏或投遞的職缺<br>上滑可以收藏，截止前會用 LINE 提醒你</div>';
     return;
   }
   rows.sort((a, b) => (a.job.deadline || '').localeCompare(b.job.deadline || ''));
+
+  // 分類：全部／收藏／已投遞（等待企業回覆）／已回覆（企業考慮中、邀請面試、未錄取）
+  if (openJobId) state.savedFilter = 'all'; // 從推播點進來：確保看得到那個職缺
+  const filter = SAVED_FILTERS.find((f) => f.key === state.savedFilter) || SAVED_FILTERS[0];
+  $('#saved-seg').innerHTML = SAVED_FILTERS.map((f) => `
+    <button class="${f.key === filter.key ? 'on' : ''}" data-seg="${f.key}" role="tab">${f.label}<em>${rows.filter(f.match).length}</em></button>`).join('');
+  $$('[data-seg]', $('#saved-seg')).forEach((b) => (b.onclick = () => { state.savedFilter = b.dataset.seg; loadSaved(); }));
+  rows = rows.filter(filter.match);
+  if (!rows.length) {
+    list.innerHTML = `<div class="empty">${filter.empty}</div>`;
+    return;
+  }
   const canApply = (r) => r.action === 'save' && r.job.status !== 'closed' && daysLeft(r.job.deadline) >= 0;
   const statusTag = (r) => {
     const left = daysLeft(r.job.deadline);
