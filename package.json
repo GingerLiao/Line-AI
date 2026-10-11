@@ -4,7 +4,7 @@
   "description": "實習 Swipe：在 LINE 上滑卡找實習的校園徵才／實習媒合助理",
   "main": "server/index.js",
   "scripts": {
-    "start": "node server/index.js",
+    "start": "node --max-old-space-size=384 server/index.js",
     "dev": "node --watch server/index.js",
     "seed": "node server/seed.js",
     "test": "node --test",

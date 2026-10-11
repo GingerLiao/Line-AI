@@ -7,6 +7,7 @@
 //   - 時效分數：快截止、剛刊登的稍微往前
 // 每 5 張卡穿插 1 張「探索」職缺，避免只推同一類（同溫層）。
 import { evaluate, daysUntil } from './matching.js';
+import { vectorOf } from './vectors.js';
 
 // ---------- 要拿去算語意向量的文字 ----------
 export function jobText(job) {
@@ -41,7 +42,7 @@ export function cosine(a, b) {
 }
 
 // 兩個向量要由同一個模型產生才能比較
-const vecOf = (row, model) => (row?.embedding?.model === model ? row.embedding.vector : null);
+const vecOf = (row, model) => (row?.embedding?.model === model ? vectorOf(row.embedding) : null);
 
 // ---------- 行為學習：從滑卡紀錄算出「偏好方向」 ----------
 const ACTION_WEIGHT = { apply: 1, save: 0.7, skip: -0.3 };
