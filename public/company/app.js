@@ -258,18 +258,19 @@ async function showJob(jobId) {
   bodyEl.innerHTML = `
     ${analyticsHtml(job, apps)}
     <div class="applicants">
-      <div><div class="side-title" style="margin-top:0">應徵者（${apps.length}）・依符合度排序</div><div id="app-list"></div></div>
+      <div><div class="side-title" style="margin-top:0">應徵者（${apps.length}）・符合標準者在前</div><div id="app-list"></div></div>
       <div class="panel" id="app-detail"></div>
     </div>`;
 
   const renderList = (selected) => {
     $('#app-list').innerHTML = apps.map((a) => {
-      const failed = a.evaluation.checks.filter((c) => !c.ok);
+      const q = qualify(a, job);
       const r = a.resume;
       const st = STATUS[a.status] || STATUS.pending;
       return `<button class="app-link ${a.id === selected ? 'on' : ''} ${a.status === 'rejected' ? 'dim' : ''}" data-app="${esc(a.id)}">
         <b>${esc(r.name || '未填姓名')} ${a.status !== 'pending' ? `<em class="mini ${st.cls}">${st.text}</em>` : ''}</b>
-        <span class="${failed.length ? 'warn' : ''}">${esc((r.department || '').replace(/系$/, '') || '科系未填')}・${gradeLabel(r.grade, r.degree)}・${failed.length ? `${failed.map((c) => c.label).join('、')}未達` : '條件符合'}</span>
+        <span>${esc((r.department || '').replace(/系$/, '') || '科系未填')}・${gradeLabel(r.grade, r.degree)}</span>
+        <span class="${q.ok ? 'pass' : 'warn'}">${q.ok ? '✓ 符合標準' : `未達：${q.unmet.map((x) => x.label).join('、')}`}</span>
       </button>`;
     }).join('');
     $$('[data-app]').forEach((b) => (b.onclick = () => { renderList(b.dataset.app); renderDetail(apps.find((a) => a.id === b.dataset.app)); }));
@@ -277,8 +278,7 @@ async function showJob(jobId) {
 
   const renderDetail = (a) => {
     const r = a.resume;
-    const ev = a.evaluation;
-    const missing = [...ev.missingSkills, ...ev.bonusMissing];
+    const q = qualify(a, job);
     const st = STATUS[a.status] || STATUS.pending;
     const final = FINAL.includes(a.status);
     $('#app-detail').innerHTML = `
@@ -286,7 +286,7 @@ async function showJob(jobId) {
         <div class="avatar">${esc((r.name || '?').slice(0, 1))}</div>
         <div class="grow"><h2>${esc(r.name || '未填姓名')} ${a.status !== 'pending' ? `<span class="status-pill ${st.cls}">${st.text}</span>` : ''}</h2>
           <div class="muted">${[r.school, r.department, gradeLabel(r.grade, r.degree)].filter(Boolean).map(esc).join('・')}</div></div>
-        <div class="score"><b>${ev.score}</b><span>符合度</span></div>
+        ${q.ok ? '<div class="stamp-ok" title="學歷、科系、年級與必備技能都符合">符合標準</div>' : ''}
       </div>
       ${final ? resultHtml(a) : `
       <div class="decide">
@@ -302,11 +302,14 @@ async function showJob(jobId) {
       <div class="ai-box">
         <div class="small" style="color:var(--green-dark)">✨ AI 履歷摘要</div>
         <div class="sum" id="ai-sum">${summaries[a.id] ? esc(summaries[a.id]) : (a.aiSummary ? esc(a.aiSummary) : '<span class="spinner dark"></span> AI 摘要產生中…（約 5–15 秒）')}</div>
-        <div class="chips">
-          ${ev.checks.map((c) => `<span class="tag ${c.ok ? '' : 'bad'}" title="${esc(c.detail)}">${c.ok ? '✓' : '✕'} ${esc(c.label)}</span>`).join('')}
-          ${missing.map((s) => `<span class="tag warn">${esc(s)}・缺</span>`).join('')}
-        </div>
       </div>
+      <section class="check-card">
+        <h4>📋 錄取條件檢核 <span class="muted small">${q.ok ? '全部符合' : `${q.unmet.length} 項未達`}</span></h4>
+        <table class="checks">
+          <tr><th>條件</th><th>職缺要求</th><th>應徵者</th><th></th></tr>
+          ${q.items.map((x) => `<tr class="${x.ok ? '' : 'no'}"><td>${esc(x.label)}</td><td>${esc(x.need)}</td><td>${esc(x.have)}</td><td class="mark">${x.ok ? '✓ 符合' : '✕ 未達'}</td></tr>`).join('')}
+        </table>
+      </section>
       <div class="resume-grid">
         <section class="r-card">
           <h4>🎓 學歷</h4>
@@ -428,8 +431,7 @@ function interviewDialog(a, job) {
 function analyticsHtml(job, apps) {
   const n = apps.length;
   const count = (fn) => apps.filter(fn).length;
-  const allOk = count((a) => a.evaluation.checks.every((c) => c.ok) && !a.evaluation.missingSkills.length);
-  const avg = Math.round(apps.reduce((s, a) => s + a.evaluation.score, 0) / n);
+  const passed = count((a) => qualify(a, job).ok);
   const byStatus = Object.keys(STATUS).map((k) => ({ label: STATUS[k].text, v: count((a) => (a.status || 'pending') === k) }));
 
   const tally = (values) => {
@@ -455,8 +457,8 @@ function analyticsHtml(job, apps) {
     <div class="analytics-head"><b>📊 應徵者分析</b><span class="muted small">共 ${n} 位</span></div>
     <div class="stats">
       <div class="stat"><span>應徵人數</span><b>${n}</b></div>
-      <div class="stat"><span>條件全符合</span><b>${allOk}<small> / ${n}</small></b></div>
-      <div class="stat"><span>平均符合度</span><b>${avg}<small>%</small></b></div>
+      <div class="stat"><span>符合標準</span><b>${passed}<small> / ${n}</small></b></div>
+      <div class="stat"><span>待處理</span><b>${count((a) => (a.status || 'pending') === 'pending')}</b></div>
       <div class="stat"><span>已邀請面試</span><b>${count((a) => a.status === 'interview')}</b></div>
     </div>
     <div class="bars-grid">
@@ -493,4 +495,23 @@ function entryHtml(x) {
         ${x.file?.url ? `<a href="${esc(x.file.url)}" target="_blank" rel="noopener">📄 ${esc(x.file.name)}</a>` : ''}
       </div>` : ''}
     </div>`;
+}
+
+// =============== 錄取條件檢核（學歷・科系・年級・必備技能）===============
+// 只看企業設定的硬性條件，全部符合就蓋「符合標準」章，不打分數
+function qualify(a, job) {
+  const r = a.resume;
+  const req = job.requirements || {};
+  const check = (key) => a.evaluation.checks.find((c) => c.key === key);
+  const items = [
+    { label: '學歷', need: req.degree || '不限', have: r.degree || '未填', ok: check('degree')?.ok ?? true },
+    { label: '科系', need: req.departments?.length ? req.departments.join('、') : '不限', have: r.department || '未填', ok: check('department')?.ok ?? true },
+    { label: '年級', need: req.minGrade ? `${gradeLabel(req.minGrade)}以上` : '不限', have: gradeLabel(r.grade, r.degree), ok: check('grade')?.ok ?? true },
+    ...(job.requiredSkills || []).map((skill) => ({
+      label: `必備：${skill}`, need: '需具備', ok: !a.evaluation.missingSkills.includes(skill),
+      have: a.evaluation.missingSkills.includes(skill) ? '履歷未列' : '有',
+    })),
+  ];
+  const unmet = items.filter((x) => !x.ok).map((x) => ({ ...x, label: x.label.replace(/^必備：/, '') }));
+  return { items, unmet, ok: !unmet.length };
 }

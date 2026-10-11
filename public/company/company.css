@@ -70,9 +70,21 @@
 .job-head h2 { margin: 0 0 4px; font-size: 20px; }
 .job-head .acts { display: flex; gap: 8px; }
 .person .grow { flex: 1; min-width: 0; }
-.score { text-align: center; background: var(--green-soft); color: var(--green-dark); border-radius: 12px; padding: 6px 12px; }
-.score b { display: block; font-size: 22px; line-height: 1.1; }
-.score span { font-size: 11px; }
+.stamp-ok {
+  flex: none; transform: rotate(-10deg); color: #e5484d; border: 3px solid #e5484d; border-radius: 10px;
+  padding: 6px 14px; font-size: 20px; font-weight: 900; letter-spacing: .12em; box-shadow: inset 0 0 0 2px #fff, inset 0 0 0 4px #e5484d;
+  background: #fff7f7; opacity: .92;
+}
+.app-link span { display: block; }
+.app-link span.pass { color: var(--green-dark); font-weight: 600; }
+.check-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 16px; }
+.check-card h4 { margin: 0 0 10px; font-size: 15px; display: flex; gap: 10px; align-items: baseline; }
+table.checks { width: 100%; border-collapse: collapse; font-size: 14px; }
+table.checks th { text-align: left; font-weight: 600; color: var(--muted); font-size: 12.5px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+table.checks td { padding: 7px 8px; border-bottom: 1px solid #f0f2f4; }
+table.checks td.mark { color: var(--green-dark); font-weight: 700; white-space: nowrap; text-align: right; }
+table.checks tr.no td { background: #fff6f6; }
+table.checks tr.no td.mark { color: var(--red); }
 .decide { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
 .decide .btn { flex: 1; min-width: 110px; }
 .decide .btn.on { background: var(--amber-soft); border-color: #f0d9a8; color: var(--amber); }

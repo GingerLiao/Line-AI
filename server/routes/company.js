@@ -78,7 +78,9 @@ companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
     const { resumeSnapshot, ...rest } = app;
     return { ...rest, resume: withFileUrls(stripEmbedding(resume)), evaluation: evaluate(resume, job) };
   }));
-  res.json(rows.filter(Boolean).sort((a, b) => b.evaluation.score - a.evaluation.score));
+  // 符合標準（學歷・科系・年級・必備技能全部符合）的排前面，其次是未達項目少的
+  const unmet = (r) => r.evaluation.checks.filter((c) => c.key !== 'language' && !c.ok).length + r.evaluation.missingSkills.length;
+  res.json(rows.filter(Boolean).sort((a, b) => unmet(a) - unmet(b)));
 });
 
 // AI 履歷摘要：算一次就存起來，避免每次打開都花時間與 API 費用
