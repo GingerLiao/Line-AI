@@ -3,15 +3,15 @@ import { Router } from 'express';
 import multer from 'multer';
 import { db } from '../db.js';
 import { parseResume, careerAdvice } from '../ai.js';
-import { fileToInput, isEmptyInput } from '../extract.js';
+import { filesToInput, isEmptyInput, parseLinks, MAX_UPLOADS } from '../extract.js';
 import { evaluate, passesFilters, matchesKeyword } from '../matching.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
 import { rankJobs } from '../ranking.js';
 import { embeddingModel } from '../ai.js';
 import { withEmbedding, stripEmbedding } from '../embeddings.js';
-import { cleanResumeFiles, withFileUrls } from '../files.js';
+import { cleanResumeFiles, withFileUrls, attachSourceFiles } from '../files.js';
 
-const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024, files: MAX_UPLOADS } });
 export const studentRouter = Router();
 
 const ownResume = async (req, id) => {
@@ -24,15 +24,25 @@ studentRouter.get('/resumes', async (req, res) => {
   res.json((await db.find('resumes', { ownerId: req.user.userId })).map((r) => withFileUrls(stripEmbedding(r))));
 });
 
-// AI 智慧建立履歷：上傳檔案（PDF、文字檔、照片）或貼上文字 → 回傳結構化草稿（不存檔，讓學生確認後再存）
-studentRouter.post('/resumes/parse', upload.single('file'), async (req, res) => {
-  const input = await fileToInput(req.file, req.body.text || '');
-  if (isEmptyInput(input)) return res.status(400).json({ error: '請上傳檔案或貼上履歷文字' });
-  res.json(await parseResume(input));
+// AI 智慧建立履歷：可以一次給很多來源 → 回傳結構化草稿（不存檔，讓學生確認後再存）
+//  - files：履歷、作品集、證照、成績單…（PDF、Word、PowerPoint、文字檔、照片、截圖）
+//  - text：貼上的文字；links：作品或社群連結（一行一個）
+// 作品、證照檔案會自動掛到履歷對應的那一筆
+studentRouter.post('/resumes/parse', upload.array('files', MAX_UPLOADS), async (req, res) => {
+  const files = req.files || [];
+  const links = parseLinks(req.body.links);
+  const input = await filesToInput(files, { text: req.body.text || '', links });
+  if (isEmptyInput(input)) {
+    return res.status(400).json({ error: input.skipped.length ? `讀不到「${input.skipped.join('、')}」的內容，請改存成 PDF 或截圖上傳` : '請上傳檔案、貼上文字或連結' });
+  }
+  const parsed = await parseResume(input);
+  parsed.links = [...new Set([...(parsed.links || []), ...links])];
+  const attached = await attachSourceFiles(parsed, files, req.user.userId);
+  res.json(withFileUrls({ ...parsed, attached, skipped: input.skipped }));
 });
 
 studentRouter.post('/resumes', async (req, res) => {
-  const { id, embedding, aiFailed, ...data } = req.body;
+  const { id, embedding, aiFailed, attached, skipped, ...data } = req.body;
   const clean = await cleanResumeFiles(data, req.user.userId); // 附件只能是自己上傳的
   // 存檔時順便算語意向量，給滑卡排序用
   const row = await withEmbedding({ ...clean, ownerId: req.user.userId, updatedAt: new Date().toISOString() }, 'resume');
@@ -170,6 +180,16 @@ async function applyToJob(req, job, resumeId) {
     url: liffUrl('company', `?job=${job.id}`),
   }));
 }
+
+// 單一職缺（朋友用 LINE 分享的連結打開）：附上我對這個職缺的狀態
+studentRouter.get('/jobs/:id', async (req, res) => {
+  const job = await db.get('jobs', req.params.id);
+  if (!job) return res.status(404).json({ error: '找不到這個職缺，可能已經下架' });
+  const me = req.user.userId;
+  const swipe = (await db.find('swipes', { studentId: me, jobId: job.id })).find((s) => s.action !== 'skip');
+  const app = swipe?.action === 'apply' ? (await db.find('applications', { studentId: me, jobId: job.id }))[0] : null;
+  res.json({ job: stripEmbedding(job), swipe: swipe || null, status: app?.status || null });
+});
 
 // 我的收藏 / 投遞紀錄
 studentRouter.get('/saved', async (req, res) => {

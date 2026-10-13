@@ -129,6 +129,28 @@ function safeSet(k, v, store = 'localStorage') { try { window[store].setItem(k, 
 // 年級文字（大二、碩一、已畢業…）
 export { gradeLabel, GRADE_OPTIONS, fitGrade, GRADUATED } from './grades.js';
 
+// 這個 LIFF App 的分享網址（朋友點了會在 LINE 裡打開）；示範模式用一般網址
+export const liffLink = (query = '') => (liffId ? `https://liff.line.me/${liffId}${query}` : `${location.origin}${location.pathname}${query}`);
+
+// 用 LINE 分享給朋友：
+//  - LINE App 內且有開啟 Share Target Picker → 選好友／群組，送出 Flex 卡片
+//  - 其他情況 → 打開 LINE 的分享網址（文字＋連結）
+// 回傳 'sent' | 'cancel' | 'link'
+export async function shareToLine(messages, text) {
+  if (liffId && liff.isApiAvailable?.('shareTargetPicker')) {
+    try {
+      const res = await liff.shareTargetPicker(messages, { isMultiple: true });
+      return res ? 'sent' : 'cancel';
+    } catch (err) {
+      console.warn('shareTargetPicker 失敗，改用分享連結', err);
+    }
+  }
+  const url = `https://line.me/R/share?text=${encodeURIComponent(text)}`;
+  if (inLineApp()) liff.openWindow({ url, external: false });
+  else window.open(url, '_blank');
+  return 'link';
+}
+
 // 在 LINE 裡面開啟時，提供「用瀏覽器開啟」（方便切去其他聊天室複製東西）
 export const inLineApp = () => Boolean(window.liff?.isInClient?.());
 export function openExternal(url = location.href) {
@@ -166,14 +188,58 @@ export async function prepareUpload(file) {
     canvas.height = Math.round(bitmap.height * scale);
     canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise((r) => canvas.toBlob(r, 'image/jpeg', 0.85));
-    return new File([blob], 'photo.jpg', { type: 'image/jpeg' });
+    const base = (file.name || '').replace(/\.[^.]*$/, '') || '照片';
+    return new File([blob], `${base}.jpg`, { type: 'image/jpeg' });
   } catch {
     return file; // 瀏覽器不支援就直接上傳原檔
   }
 }
 
-// 檔案選擇器接受的格式：PDF、文字檔、照片（iPhone 會出現「照片圖庫／拍照／選擇檔案」）
-export const UPLOAD_ACCEPT = '.pdf,.txt,image/*';
+// 檔案選擇器接受的格式：PDF、Word、PowerPoint、文字檔、照片（iPhone 會出現「照片圖庫／拍照／選擇檔案」）
+export const UPLOAD_ACCEPT = '.pdf,.docx,.pptx,.txt,.md,.csv,image/*';
+export const MAX_UPLOADS = 8;
+const MAX_UPLOAD_MB = 10;
+
+// 多檔案選擇器：可以分好幾次加入、個別移除，也可以在輸入框直接貼上截圖
+//   const picker = multiUpload(container, { pasteTarget: textarea });
+//   picker.files() → 已處理好（照片已縮小）的檔案陣列
+export function multiUpload(root, { pasteTarget, hint = '' } = {}) {
+  const files = [];
+  root.innerHTML = `
+    <div class="upload-pick">
+      <label class="btn">📎 加入檔案／照片<input type="file" multiple accept="${UPLOAD_ACCEPT}"></label>
+      <span class="muted small">${esc(hint || `可多選，最多 ${MAX_UPLOADS} 個`)}</span>
+    </div>
+    <div class="file-list"></div>`;
+  const list = root.querySelector('.file-list');
+  const icon = (f) => (f.type.startsWith('image/') ? '🖼' : /pdf/.test(f.type) || /\.pdf$/i.test(f.name) ? '📕' : /\.(docx|pptx)$/i.test(f.name) ? '📘' : '📄');
+  const render = () => {
+    list.innerHTML = files.map((f, i) => `
+      <span class="up-chip">${icon(f)} <span class="fc-name">${esc(f.name)}</span><small>${Math.max(1, Math.round(f.size / 1024))} KB</small>
+        <button type="button" class="fc-del" data-i="${i}" aria-label="移除">✕</button></span>`).join('');
+    list.querySelectorAll('.fc-del').forEach((b) => (b.onclick = () => { files.splice(Number(b.dataset.i), 1); render(); }));
+  };
+  const add = async (picked) => {
+    for (const raw of picked) {
+      if (files.length >= MAX_UPLOADS) { toast(`一次最多 ${MAX_UPLOADS} 個檔案`); break; }
+      const f = await prepareUpload(raw);
+      if (f.size > MAX_UPLOAD_MB * 1024 * 1024) { toast(`「${raw.name}」超過 ${MAX_UPLOAD_MB}MB`); continue; }
+      files.push(f);
+    }
+    render();
+  };
+  const input = root.querySelector('input[type=file]');
+  input.onchange = async () => { await add([...input.files]); input.value = ''; };
+  // 在輸入框按「貼上」：剪貼簿裡有截圖就加入檔案
+  pasteTarget?.addEventListener('paste', (e) => {
+    const imgs = [...(e.clipboardData?.files || [])].filter((f) => f.type.startsWith('image/'));
+    if (!imgs.length) return;
+    e.preventDefault();
+    add(imgs.map((f, i) => new File([f], `截圖${files.length + i + 1}.${f.type.split('/')[1] || 'png'}`, { type: f.type })));
+    toast('已加入截圖');
+  });
+  return { files: () => [...files] };
+}
 
 // 確認對話框（取代瀏覽器內建的 confirm），回傳 Promise<boolean>
 export function confirmDialog({ title, message = '', ok = '確定', danger = false }) {

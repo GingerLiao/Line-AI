@@ -3,14 +3,14 @@ import { Router } from 'express';
 import multer from 'multer';
 import { db } from '../db.js';
 import { parseJob, summarizeApplicant } from '../ai.js';
-import { fileToInput, isEmptyInput } from '../extract.js';
+import { filesToInput, isEmptyInput, MAX_UPLOADS } from '../extract.js';
 import { evaluate } from '../matching.js';
 import { parseAddress } from '../../public/shared/taiwan.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
 import { withEmbedding, stripEmbedding } from '../embeddings.js';
 import { withFileUrls } from '../files.js';
 
-const upload = multer({ limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({ limits: { fileSize: 10 * 1024 * 1024, files: MAX_UPLOADS } });
 export const companyRouter = Router();
 
 const ownJob = async (req, id) => {
@@ -25,16 +25,19 @@ companyRouter.get('/jobs', async (req, res) => {
   res.json(jobs.map((j) => ({ ...stripEmbedding(j), applicantCount: apps.filter((a) => a.jobId === j.id).length })));
 });
 
-// 上傳檔案智慧建檔：AI 把職缺說明（PDF、文字檔、照片）拆成結構化欄位，回傳草稿讓企業確認／微調
-companyRouter.post('/jobs/parse', upload.single('file'), async (req, res) => {
-  const input = await fileToInput(req.file, req.body.text || '');
-  if (isEmptyInput(input)) return res.status(400).json({ error: '請上傳檔案或貼上職缺說明' });
-  res.json(await parseJob(input));
+// 上傳檔案智慧建檔：職缺說明、徵才海報、公司簡介…（可以好幾個檔案＋貼上文字）
+// AI 合併後拆成結構化欄位，回傳草稿讓企業確認／微調
+companyRouter.post('/jobs/parse', upload.array('files', MAX_UPLOADS), async (req, res) => {
+  const input = await filesToInput(req.files || [], { text: req.body.text || '' });
+  if (isEmptyInput(input)) {
+    return res.status(400).json({ error: input.skipped.length ? `讀不到「${input.skipped.join('、')}」的內容，請改存成 PDF 或截圖上傳` : '請上傳檔案或貼上職缺說明' });
+  }
+  res.json({ ...(await parseJob(input)), skipped: input.skipped });
 });
 
 // 確認送出，開始媒合：職缺進入卡池
 companyRouter.post('/jobs', async (req, res) => {
-  const { id, applicantCount, embedding, createdAt, aiFailed, status, ...data } = req.body;
+  const { id, applicantCount, embedding, createdAt, aiFailed, skipped, status, ...data } = req.body;
   let row = {
     ...data,
     wage: Number(data.wage) || 0,

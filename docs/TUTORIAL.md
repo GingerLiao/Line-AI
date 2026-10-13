@@ -273,11 +273,15 @@ const res = await client.chat.completions.create({
 | Endpoint URL | `https://你的網址/student/` | `https://你的網址/company/` |
 | Scopes | ✅ openid ✅ profile | ✅ openid ✅ profile |
 | Add friend option | **On (Aggressive)** | On (Normal) |
+| shareTargetPicker | **On** | Off |
 
 > Endpoint URL 必須是 **https**。第 6 關用 ngrok 會拿到 https 網址，現在可以先隨便填，等等再回來改。
 
 > 📐 **Size 怎麼選？** Full（全螢幕）最適合滑卡；Tall（約 8 成高）會露出後面的聊天室；Compact 只有半螢幕，滑卡會太擠。
 > 隨時可以在 LINE Developers → LINE Login channel → **LIFF** 分頁 → 點 LIFF app → **Edit** → **Size** 修改，按 Update 立即生效，不用改程式。
+
+> 📤 **shareTargetPicker 是什麼？** 學生在職缺詳情按「用 LINE 分享給朋友」時，會跳出 LINE 的好友／群組選單，送出一張職缺卡片。
+> 沒打開也能用，只是會改成分享「文字＋連結」。設定位置同上：LIFF app → **Edit** → **shareTargetPicker** 打開。
 
 ### 5-3 填入 .env
 

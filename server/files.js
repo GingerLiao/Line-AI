@@ -6,6 +6,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { db } from './db.js';
 import { config } from './config.js';
+import { fileName } from './extract.js';
 
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
 const CHUNK = 500 * 1024;
@@ -20,22 +21,27 @@ export function fileUrl(id) {
   return `/files/${encodeURIComponent(id)}?exp=${exp}&sig=${sign(id, exp)}`;
 }
 
+// 存一個檔案到資料庫（切塊），回傳附件資料 { id, name, mime, size, url }
+export async function storeFile(ownerId, { name, mime, buffer }) {
+  const chunks = Math.ceil(buffer.length / CHUNK);
+  const meta = await db.add('files', { ownerId, name, mime, size: buffer.length, chunks, createdAt: new Date().toISOString() });
+  for (let i = 0; i < chunks; i++) {
+    await db.set('fileChunks', `${meta.id}-${i}`, { data: buffer.subarray(i * CHUNK, (i + 1) * CHUNK).toString('base64') });
+  }
+  return { id: meta.id, name, mime, size: buffer.length, url: fileUrl(meta.id) };
+}
+
+// 可以當履歷附件的檔案：PDF 或圖片、5MB 內
+export const attachable = (f) => /^(image\/|application\/pdf$)/.test(f.mimetype) && f.size <= MAX_FILE_BYTES;
+
 // 學生上傳附件
 const upload = multer({ limits: { fileSize: MAX_FILE_BYTES } });
 export const studentFilesRouter = Router();
 studentFilesRouter.post('/', upload.single('file'), async (req, res) => {
   const f = req.file;
   if (!f) return res.status(400).json({ error: '請選擇檔案' });
-  if (!/^(image\/|application\/pdf$)/.test(f.mimetype)) return res.status(400).json({ error: '只支援 PDF 或圖片' });
-  const name = Buffer.from(f.originalname, 'latin1').toString('utf8').slice(0, 120); // multer 檔名是 latin1，轉回中文
-  const chunks = Math.ceil(f.size / CHUNK);
-  const meta = await db.add('files', {
-    ownerId: req.user.userId, name, mime: f.mimetype, size: f.size, chunks, createdAt: new Date().toISOString(),
-  });
-  for (let i = 0; i < chunks; i++) {
-    await db.set('fileChunks', `${meta.id}-${i}`, { data: f.buffer.subarray(i * CHUNK, (i + 1) * CHUNK).toString('base64') });
-  }
-  res.json({ id: meta.id, name, mime: f.mimetype, size: f.size, url: fileUrl(meta.id) });
+  if (!attachable(f)) return res.status(400).json({ error: '只支援 PDF 或圖片' });
+  res.json(await storeFile(req.user.userId, { name: fileName(f), mime: f.mimetype, buffer: f.buffer }));
 });
 
 // 用簽名網址下載／預覽
@@ -84,4 +90,20 @@ export function withFileUrls(resume) {
     out[key] = (resume[key] || []).map((item) => (item.file?.id ? { ...item, file: { ...item.file, url: fileUrl(item.file.id) } } : item));
   }
   return out;
+}
+
+// AI 建檔後：AI 判斷「這筆作品／證照就是第 N 個上傳的檔案」時，把那個檔案存起來掛到那一筆
+// （同一個檔案只存一次；不能當附件的格式就略過）
+export async function attachSourceFiles(resume, files, ownerId) {
+  const stored = {};
+  let count = 0;
+  for (const key of RESUME_SECTIONS) {
+    resume[key] = await Promise.all((resume[key] || []).map(async ({ source, ...item }) => {
+      const f = files[Number(source) - 1];
+      if (!f || item.file || !attachable(f)) return item;
+      stored[source] ??= storeFile(ownerId, { name: fileName(f), mime: f.mimetype, buffer: f.buffer }).then((x) => (count++, x));
+      return { ...item, file: await stored[source] };
+    }));
+  }
+  return count;
 }

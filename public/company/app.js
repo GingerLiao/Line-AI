@@ -1,6 +1,6 @@
 import {
   initAuth, api, profile, logout, isFriend, $, $$, esc, toast, splitList,
-  gradeLabel, aiWaiting, prepareUpload, confirmDialog, UPLOAD_ACCEPT,
+  gradeLabel, aiWaiting, confirmDialog, multiUpload,
 } from '/shared/api.js';
 import { parseAddress, placeLabel } from '/shared/taiwan.js';
 
@@ -61,13 +61,9 @@ function showJobForm(job) {
     <div class="panel">
       <h2 class="panel-title">${job ? '編輯職缺' : '刊登新職缺'}</h2>
       <div class="ai-fill">
-        <div class="ai-fill-head"><b>✨ 有現成的職缺說明？</b><span class="muted small">上傳 PDF、文字檔、徵才海報照片，或直接貼上文字，AI 會幫你填好下面的欄位。也可以跳過，直接自己填。</span></div>
-        <div class="upload-pick">
-          <label class="btn" for="j-file">📎 選擇檔案／照片</label>
-          <input type="file" id="j-file" accept="${UPLOAD_ACCEPT}">
-          <span class="file-name" id="j-file-name">尚未選擇</span>
-        </div>
-        <textarea class="input" id="j-text" placeholder="或直接貼上職缺說明文字…" style="margin-top:8px;min-height:64px"></textarea>
+        <div class="ai-fill-head"><b>✨ 有現成的職缺說明？</b><span class="muted small">可以一次丟好幾個：職缺說明（PDF、Word、PowerPoint）、徵才海報照片、公司簡介、104 頁面截圖…，或直接貼上文字。AI 會合併整理，幫你填好下面的欄位。也可以跳過，直接自己填。</span></div>
+        <div id="j-files"></div>
+        <textarea class="input" id="j-text" placeholder="或直接貼上職缺說明文字（也可以在這裡貼上截圖）…" style="margin-top:8px;min-height:64px"></textarea>
         <div style="margin-top:10px"><button class="btn primary" id="j-parse">✨ AI 自動填入欄位</button></div>
       </div>
       <div class="ai-note hidden" id="ai-note"></div>
@@ -75,19 +71,19 @@ function showJobForm(job) {
     </div>`;
 
   if (job) $('#back').onclick = () => showJob(job.id);
-  $('#j-file').onchange = (e) => ($('#j-file-name').textContent = e.target.files[0]?.name || '尚未選擇');
+  const picker = multiUpload($('#j-files'), { pasteTarget: $('#j-text') });
   $('#j-parse').onclick = async (e) => {
     const fd = new FormData();
-    const file = await prepareUpload($('#j-file').files[0]);
-    if (file) fd.append('file', file);
+    picker.files().forEach((f) => fd.append('files', f, f.name));
     fd.append('text', $('#j-text').value);
-    const stop = aiWaiting(e.currentTarget, 'AI 解析中');
+    const stop = aiWaiting(e.currentTarget, 'AI 解析中', picker.files().length > 2 ? '檔案較多，約 20–60 秒' : '約 10–30 秒');
     try {
-      const parsed = await api('/company/jobs/parse', { method: 'POST', form: fd });
+      const { skipped, ...parsed } = await api('/company/jobs/parse', { method: 'POST', form: fd });
       fillJobForm({ ...parsed, id: job?.id });
-      $('#ai-note').textContent = parsed.aiFailed
+      $('#ai-note').textContent = (parsed.aiFailed
         ? '⚠️ AI 目前忙碌，已先用基本方式填入，請仔細確認欄位（或稍後再按一次）'
-        : '⚡ AI 已自動填好，請確認或微調後送出';
+        : '⚡ AI 已自動填好，請確認或微調後送出')
+        + (skipped?.length ? `　（讀不到：${skipped.join('、')}，請改存成 PDF 或截圖）` : '');
       $('#ai-note').classList.remove('hidden');
       $('#job-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
     } catch (err) {

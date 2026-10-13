@@ -23,14 +23,19 @@ const lean = (row) => {
   return rest;
 };
 
-// 照片（data URI）轉成 AI 看得懂的「文字 + 圖片」訊息
-const withImage = (prompt, image) => [
-  { type: 'text', text: prompt },
-  { type: 'image_url', image_url: { url: image } },
-];
+// 文字 + 多張圖片（data URI）→ AI 看得懂的訊息；沒有圖片就只送文字
+const withImages = (text, images = []) => (images.length
+  ? [{ type: 'text', text: text || '請讀出圖片內容後解析。' }, ...images.map((url) => ({ type: 'image_url', image_url: { url } }))]
+  : text);
+
+// 舊的呼叫方式 { image } 也接受
+const imagesOf = ({ images = [], image }) => (image ? [...images, image] : images);
+
+// 多個來源（檔案、貼上文字、截圖）時的共同說明
+const MULTI_SOURCE = '使用者可能一次給了好幾個來源（【貼上的文字】、【檔案 N】、附圖、【連結】），請把所有來源的資訊合併成一份；內容重複時以較完整、較新的為準。';
 
 // 依序嘗試主要模型與備用模型，全部失敗就丟出最後的錯誤
-// user 可以是文字，或 withImage() 產生的「文字 + 圖片」
+// user 可以是文字，或 withImages() 產生的「文字 + 圖片」
 async function askJson(system, user) {
   let lastErr;
   for (const model of models) {
@@ -77,23 +82,30 @@ const RESUME_SCHEMA = `{
   "about": "自我介紹或自傳，60–150 字（個性、興趣、求職目標放這裡，不要放進 school）",
   "skills": ["技能，每個技能一個短詞，例如 SQL、Python、Excel"],
   "languages": [{"name": "中文", "level": "母語"}],
-  "awards": [{"title": "競賽或證照名稱", "role": "名次或成績，例如 第二名、多益 850", "date": "2025/05", "description": "一句話說明", "link": ""}],
-  "projects": [{"title": "專案或作品名稱", "role": "擔任角色", "date": "2025/03–2025/06", "description": "做了什麼、成果", "link": "作品網址"}],
-  "activities": [{"title": "社團、志工、工讀、幹部等經歷", "role": "職位", "date": "2024/09–2025/06", "description": "一句話描述成果", "link": ""}],
+  "awards": [{"title": "競賽或證照名稱", "role": "名次或成績，例如 第二名、多益 850", "date": "2025/05", "description": "一句話說明", "link": "", "source": 0}],
+  "projects": [{"title": "專案或作品名稱", "role": "擔任角色", "date": "2025/03–2025/06", "description": "做了什麼、成果", "link": "作品網址", "source": 0}],
+  "activities": [{"title": "社團、志工、工讀、幹部等經歷", "role": "職位", "date": "2024/09–2025/06", "description": "一句話描述成果", "link": "", "source": 0}],
   "links": ["個人作品集網站或 GitHub 網址"],
   "contact": {"email": "", "phone": "", "lineId": ""}
 }`;
 
-// input：{ text } 或 { image: 'data:image/jpeg;base64,...' }（拍照上傳的履歷）
-export async function parseResume({ text = '', image } = {}) {
+// input：{ text, images: ['data:image/jpeg;base64,...'] }（filesToInput 整理好的檔案、文字、截圖、連結）
+export async function parseResume(input = {}) {
+  const text = input.text || '';
+  const images = imagesOf(input);
   const { value, aiFailed } = await tryAi(
     () => askJson(
-      `你是履歷解析器。把使用者的履歷整理成以下 JSON 格式，找不到的欄位留空字串或空陣列，不要捏造：\n${RESUME_SCHEMA}`,
-      image ? withImage('這是一份履歷的照片，請讀出內容後解析。', image) : text,
+      `你是履歷解析器。把使用者的資料整理成一份履歷，格式如下 JSON，找不到的欄位留空字串或空陣列，不要捏造。
+${MULTI_SOURCE}
+- 作品、專案、證書可能是另外上傳的檔案或連結，請整理進 awards / projects / activities。
+- source：這筆資料「本身就是」某個上傳的檔案（例如作品集 PDF、證照照片）時，填那個檔案的編號 N；履歷本身或其他情況填 0。
+- 使用者給的連結請放進對應那筆的 link，或放進 links。
+${RESUME_SCHEMA}`,
+      withImages(text, images),
     ),
     () => fallbackParseResume(text),
   );
-  return { ...value, aiFailed: aiFailed || Boolean(image && !client) };
+  return { ...value, aiFailed: aiFailed || Boolean(images.length && !client) };
 }
 
 // ---------------- 職缺 ----------------
@@ -127,16 +139,20 @@ const JOB_SCHEMA = `{
   "benefits": ["公司福利短詞"]
 }`;
 
-// input：{ text } 或 { image }（徵才海報、職缺說明的照片）
-export async function parseJob({ text = '', image } = {}) {
+// input：{ text, images }（職缺說明檔、徵才海報照片、公司簡介、貼上的文字…可以好幾個）
+export async function parseJob(input = {}) {
+  const text = input.text || '';
+  const images = imagesOf(input);
   const { value, aiFailed } = await tryAi(
     () => askJson(
-      `你是職缺解析器。今天是 ${new Date().toISOString().slice(0, 10)}。把職缺說明整理成以下 JSON 格式，找不到的欄位留空，不要捏造：\n${JOB_SCHEMA}`,
-      image ? withImage('這是一張職缺說明的照片，請讀出內容後解析。', image) : text,
+      `你是職缺解析器。今天是 ${new Date().toISOString().slice(0, 10)}。把職缺說明整理成以下 JSON 格式，找不到的欄位留空，不要捏造。
+${MULTI_SOURCE}
+${JOB_SCHEMA}`,
+      withImages(text, images),
     ),
     () => fallbackParseJob(text),
   );
-  return { ...value, aiFailed: aiFailed || Boolean(image && !client) };
+  return { ...value, aiFailed: aiFailed || Boolean(images.length && !client) };
 }
 
 // ---------------- AI 職涯健檢 ----------------

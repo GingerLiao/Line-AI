@@ -45,7 +45,11 @@ app.get('/api/cron/reminders', async (req, res) => {
 // 開發用：手動觸發截止提醒（示範模式才開放）
 if (demoMode) app.post('/api/dev/run-reminders', async (req, res) => res.json({ sent: await sendDeadlineReminders() }));
 
+// 上傳檔案太大、太多個
+const UPLOAD_ERRORS = { LIMIT_FILE_SIZE: '檔案太大，每個檔案請小於 10MB', LIMIT_FILE_COUNT: '檔案太多，一次最多 8 個', LIMIT_UNEXPECTED_FILE: '檔案太多，一次最多 8 個' };
+
 app.use((err, req, res, next) => {
+  if (err.name === 'MulterError') return res.status(400).json({ error: UPLOAD_ERRORS[err.code] || err.message });
   console.error(err);
   res.status(500).json({ error: err.message });
 });

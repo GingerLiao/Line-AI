@@ -1,6 +1,6 @@
 import {
   initAuth, api, $, $$, esc, toast, daysLeft, mmdd, splitList,
-  gradeLabel, GRADE_OPTIONS, fitGrade, GRADUATED, aiWaiting, prepareUpload, confirmDialog, UPLOAD_ACCEPT,
+  gradeLabel, GRADE_OPTIONS, fitGrade, GRADUATED, aiWaiting, prepareUpload, confirmDialog, multiUpload, shareToLine, liffLink,
 } from '/shared/api.js';
 import { CITIES, DISTRICTS, REMOTE, placeLabel, parseAddress } from '/shared/taiwan.js';
 
@@ -297,10 +297,113 @@ function openJobDetail(job, extra = {}) {
     <div style="margin-top:20px;display:grid;gap:10px">
       ${extra.actionHtml || ''}
       <button class="btn ${extra.actionHtml ? '' : 'primary'} block" id="do-check">✨ AI 職涯健檢：我適合這個職缺嗎？</button>
+      <button class="btn block" id="do-share">📤 用 LINE 分享給朋友</button>
     </div>
   `);
   $('#do-check', body).onclick = () => openCareerCheck(job);
+  $('#do-share', body).onclick = () => shareJob(job);
   return body;
+}
+
+// =============== 用 LINE 分享職缺 ===============
+// 朋友收到一張職缺卡片，點「查看職缺」會在 LINE 裡打開實習 Swipe 的這個職缺
+function jobFlex(job, url) {
+  const place = placeLabel(job.city ? job : parseAddress(job.location)) || job.location || '—';
+  const row = (k, v) => ({
+    type: 'box', layout: 'baseline', spacing: 'sm',
+    contents: [
+      { type: 'text', text: k, size: 'sm', color: '#8c959f', flex: 2 },
+      { type: 'text', text: String(v || '—'), size: 'sm', color: '#1c2126', flex: 5, wrap: true },
+    ],
+  });
+  return {
+    type: 'flex',
+    altText: `推薦你一個實習：${job.companyName}「${job.title}」`,
+    contents: {
+      type: 'bubble',
+      header: {
+        type: 'box', layout: 'vertical', backgroundColor: '#06C755', paddingAll: '14px',
+        contents: [{ type: 'text', text: '實習 Swipe｜朋友推薦你這個實習', color: '#ffffff', size: 'xs', weight: 'bold' }],
+      },
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'md',
+        contents: [
+          { type: 'text', text: job.category || '實習', size: 'xs', color: '#04964a', weight: 'bold' },
+          { type: 'text', text: job.title, size: 'lg', weight: 'bold', wrap: true },
+          { type: 'text', text: job.companyName, size: 'sm', color: '#4a5560', wrap: true },
+          { type: 'separator', margin: 'md' },
+          {
+            type: 'box', layout: 'vertical', spacing: 'sm', margin: 'md',
+            contents: [
+              row('時薪', job.wage ? `${job.wage} 元` : '面議'),
+              row('每週', job.daysPerWeek ? `${job.daysPerWeek} 天` : '—'),
+              row('地點', place),
+              row('截止', job.deadline ? mmdd(job.deadline) : '—'),
+            ],
+          },
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical',
+        contents: [{ type: 'button', style: 'primary', color: '#06C755', action: { type: 'uri', label: '查看職缺', uri: url } }],
+      },
+    },
+  };
+}
+
+async function shareJob(job) {
+  const url = liffLink(`?job=${encodeURIComponent(job.id)}`);
+  const text = `推薦你一個實習：${job.companyName}「${job.title}」\n時薪 ${job.wage || '面議'} 元・${job.location || ''}\n👉 ${url}`;
+  const result = await shareToLine([jobFlex(job, url)], text);
+  if (result === 'sent') toast('已分享給朋友 🎉');
+}
+
+// 朋友分享的連結打開：顯示職缺，可以直接收藏或投遞
+async function openSharedJob(id) {
+  let data;
+  try {
+    data = await api(`/student/jobs/${encodeURIComponent(id)}`);
+  } catch (err) {
+    return toast(err.message);
+  }
+  const { job, swipe, status } = data;
+  const applied = swipe?.action === 'apply';
+  const open = job.status !== 'closed';
+  const body = openJobDetail(job, {
+    statusHtml: applied
+      ? `<div style="margin-bottom:12px"><span class="tag">${esc(STATUS_TEXT[status || 'pending'])}</span></div>`
+      : '<div class="notice">👋 朋友分享給你的實習職缺</div>',
+    actionHtml: applied || !open ? '' : `
+      <button class="btn primary block" id="sh-apply">➤ 投遞這個職缺</button>
+      ${swipe ? '<button class="btn block" disabled>⭐ 已收藏</button>' : '<button class="btn block" id="sh-save">⭐ 收藏起來</button>'}`,
+  });
+  const dropCard = () => { state.cards = state.cards.filter((c) => c.id !== job.id); renderDeck(); };
+  const saveBtn = $('#sh-save', body);
+  if (saveBtn) saveBtn.onclick = async () => {
+    saveBtn.disabled = true;
+    try {
+      await api('/student/swipes', { method: 'POST', body: { jobId: job.id, action: 'save' } });
+      saveBtn.textContent = '⭐ 已收藏';
+      dropCard();
+      toast('已收藏，截止前會用 LINE 提醒你 🔔');
+    } catch (err) {
+      saveBtn.disabled = false;
+      toast(err.message);
+    }
+  };
+  const applyBtn = $('#sh-apply', body);
+  if (applyBtn) applyBtn.onclick = async () => {
+    const resumeId = await pickResume(job);
+    if (!resumeId) return;
+    try {
+      if (swipe) await api(`/student/saved/${swipe.id}/apply`, { method: 'POST', body: { resumeId } });
+      else await api('/student/swipes', { method: 'POST', body: { jobId: job.id, action: 'apply', resumeId } });
+      dropCard();
+      toast('已投遞！企業會在 LINE 收到通知');
+    } catch (err) {
+      toast(err.message);
+    }
+  };
 }
 
 async function openCareerCheck(job) {
@@ -550,16 +653,15 @@ function normalizeResume(r = {}) {
 function openResumeEditor(resume) {
   const body = openSheet(resume ? '編輯履歷' : '智慧建立履歷', `
     ${resume ? '' : `
-    <div class="box green">
-      <b>✨ 上傳履歷，AI 自動填好</b>
-      <p class="small muted">支援 PDF、文字檔，也可以直接拍照或從相簿選履歷照片；或在下面貼上履歷文字。</p>
-      <div class="upload-pick">
-        <label class="btn" for="r-file">📎 選擇檔案／照片</label>
-        <input type="file" id="r-file" accept="${UPLOAD_ACCEPT}">
-        <span class="file-name" id="r-file-name">尚未選擇</span>
-      </div>
-      <textarea class="input" id="r-text" placeholder="或貼上履歷文字…" style="margin-top:8px"></textarea>
-      <button class="btn primary block" id="r-parse" style="margin-top:8px">✨ AI 解析</button>
+    <div class="box green import-box">
+      <b>✨ 丟資料給 AI，自動建好履歷</b>
+      <p class="small muted">什麼都可以丟：舊履歷、作品集、證照照片、成績單、截圖（PDF、Word、PowerPoint、照片都可以，可以一次選好幾個）。作品和證照檔案會自動附到履歷對應的那一筆。</p>
+      <div id="r-files"></div>
+      <span class="import-label">✍️ 補充文字（可以直接貼上，也可以在這裡貼上截圖）</span>
+      <textarea class="input" id="r-text" placeholder="例如：自我介紹、社團經歷、修過的課…"></textarea>
+      <span class="import-label">🔗 作品或社群連結（一行一個）</span>
+      <textarea class="input" id="r-links" placeholder="https://github.com/…&#10;https://www.behance.net/…" style="min-height:52px"></textarea>
+      <button class="btn primary block" id="r-parse" style="margin-top:10px">✨ AI 自動建立履歷</button>
     </div>`}
     <form id="r-form" novalidate></form>`);
   const form = $('#r-form', body);
@@ -606,7 +708,8 @@ function openResumeEditor(resume) {
         label.innerHTML = '<span class="spinner dark"></span> 上傳中…';
         try {
           const fd = new FormData();
-          fd.append('file', await prepareUpload(raw), raw.name);
+          const f = await prepareUpload(raw);
+          fd.append('file', f, f.name);
           draft[key][i].file = await api('/student/files', { method: 'POST', form: fd });
         } catch (err) {
           toast(err.message.includes('large') || err.message.includes('413') ? '檔案太大，請小於 5MB' : err.message);
@@ -679,17 +782,23 @@ function openResumeEditor(resume) {
   fill(resume);
 
   if (!resume) {
-    $('#r-file', body).onchange = (e) => ($('#r-file-name', body).textContent = e.target.files[0]?.name || '尚未選擇');
+    const picker = multiUpload($('#r-files', body), { pasteTarget: $('#r-text', body) });
     $('#r-parse', body).onclick = async (e) => {
       const fd = new FormData();
-      const file = await prepareUpload($('#r-file', body).files[0]);
-      if (file) fd.append('file', file);
+      picker.files().forEach((f) => fd.append('files', f, f.name));
       fd.append('text', $('#r-text', body).value);
-      const stop = aiWaiting(e.currentTarget, 'AI 解析中');
+      fd.append('links', $('#r-links', body).value);
+      const stop = aiWaiting(e.currentTarget, 'AI 建立中', picker.files().length > 2 ? '檔案較多，約 20–60 秒' : '約 10–30 秒');
       try {
-        const parsed = await api('/student/resumes/parse', { method: 'POST', form: fd });
+        const { attached, skipped, ...parsed } = await api('/student/resumes/parse', { method: 'POST', form: fd });
         fill({ title: `${parsed.department || ''}履歷`, ...parsed });
-        toast(parsed.aiFailed ? 'AI 目前忙碌，已先用基本方式填入，請確認欄位' : 'AI 已自動填好，請確認或微調');
+        const notes = [
+          parsed.aiFailed ? 'AI 目前忙碌，已先用基本方式填入，請確認欄位' : 'AI 已自動填好，請確認或微調',
+          attached ? `已附上 ${attached} 個作品／證照檔案` : '',
+          skipped?.length ? `讀不到：${skipped.join('、')}` : '',
+        ].filter(Boolean);
+        toast(notes.join('；'));
+        form.scrollIntoView({ behavior: 'smooth', block: 'start' });
       } catch (err) {
         toast(err.message);
       }
@@ -945,5 +1054,11 @@ currentTab = params.get('tab') || 'swipe';
 openJobId = params.get('job');
 
 switchTab(currentTab);
-// 第一次使用：先設定想找的實習條件，再開始滑卡
-if (currentTab === 'swipe' && !state.prefs.onboarded) openFilter({ welcome: true });
+if (openJobId && currentTab !== 'saved') {
+  // 朋友用 LINE 分享的職缺：直接打開（第一次使用的條件設定留到下次）
+  openSharedJob(openJobId);
+  openJobId = null;
+} else if (currentTab === 'swipe' && !state.prefs.onboarded) {
+  // 第一次使用：先設定想找的實習條件，再開始滑卡
+  openFilter({ welcome: true });
+}
