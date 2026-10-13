@@ -3,6 +3,7 @@ import {
   gradeLabel, aiWaiting, confirmDialog, multiUpload,
 } from '/shared/api.js';
 import { parseAddress, placeLabel } from '/shared/taiwan.js';
+import { slotEditor, slotText } from '/company/slots.js';
 
 const CATEGORIES = ['數據分析', '軟體開發', '設計', '行銷企劃', '業務', '財務會計', '人力資源', '行政', '法務', '研究', '產品企劃', '影音製作', '媒體', '電商', '教育', '遊戲企劃', '餐飲'];
 const STATUS = {
@@ -13,6 +14,7 @@ const STATUS = {
 };
 const FINAL = ['interview', 'rejected'];
 const STAGE_MODES = ['線上', '實體', '電話', '作業'];
+const DEFAULT_BOOKING = { minutes: 30, capacity: 1, replyDays: 7, startHour: 9, endHour: 18 };
 
 let jobs = [];
 let currentJobId = null;
@@ -61,7 +63,7 @@ function showJobForm(job) {
     <div class="panel">
       <h2 class="panel-title">${job ? '編輯職缺' : '刊登新職缺'}</h2>
       <div class="ai-fill">
-        <div class="ai-fill-head"><b>✨ 有現成的職缺說明？</b><span class="muted small">可以一次丟好幾個：職缺說明（PDF、Word、PowerPoint）、徵才海報照片、公司簡介、104 頁面截圖…，或直接貼上文字。AI 會合併整理，幫你填好下面的欄位。也可以跳過，直接自己填。</span></div>
+        <div class="ai-fill-head"><b>✨ 有現成的職缺說明？</b></div>
         <div id="j-files"></div>
         <textarea class="input" id="j-text" placeholder="或直接貼上職缺說明文字（也可以在這裡貼上截圖）…" style="margin-top:8px;min-height:64px"></textarea>
         <div style="margin-top:10px"><button class="btn primary" id="j-parse">✨ AI 自動填入欄位</button></div>
@@ -139,6 +141,9 @@ function fillJobForm(j = {}) {
     <div id="stages"></div>
     <button type="button" class="btn add-stage" id="add-stage">＋ 新增面試階段</button>
     <label class="field"><span>應備資料（逗號分隔）</span><input class="input" name="applyMaterials" placeholder="履歷, 作品集, 成績單" value="${esc((j.applyMaterials || ['履歷']).join(', '))}"></label>
+    <div class="section-title">🗓 面試預約時段（選填）</div>
+    <p class="muted small" style="margin-top:-4px">開放時段後，邀請面試時可以讓同學自己選時間，不用再打電話或寄信約。之後也可以隨時在職缺頁修改。</p>
+    <div id="slot-editor"><div class="muted small"><span class="spinner dark"></span> 載入時段…</div></div>
     <div class="form-foot">
       ${j.id ? '<button type="button" class="btn" id="cancel-edit">取消</button>' : ''}
       <button class="btn primary">${j.id ? '✓ 儲存變更' : '✓ 確認送出，開始媒合'}</button>
@@ -172,6 +177,12 @@ function fillJobForm(j = {}) {
     $$('[data-rm]', form).forEach((b) => (b.onclick = () => { collectStages(); stages.splice(Number(b.dataset.rm), 1); renderStages(); }));
   };
   renderStages();
+
+  // 面試時段：新職缺從空白開始；編輯時載入已設定的時段
+  let slots = null;
+  (j.id ? api(`/company/jobs/${j.id}/slots`) : Promise.resolve({ settings: { ...DEFAULT_BOOKING, ...j.interviewBooking }, slots: [] }))
+    .then((data) => { slots = slotEditor($('#slot-editor'), data); })
+    .catch(() => { $('#slot-editor').innerHTML = '<div class="muted small">時段載入失敗，可以稍後在職缺頁設定。</div>'; });
   $('#add-stage').onclick = () => { collectStages(); stages.push({ name: '', mode: '實體', detail: '' }); renderStages(); };
   if (j.id) $('#cancel-edit').onclick = () => showJob(j.id);
 
@@ -198,8 +209,10 @@ function fillJobForm(j = {}) {
           responsibilities: f.responsibilities.split('\n').map((x) => x.trim()).filter(Boolean),
           interviewStages: stages.filter((st) => st.name),
           applyMaterials: splitList(f.applyMaterials),
+          interviewBooking: slots?.value().settings || j.interviewBooking,
         },
       });
+      if (slots) await api(`/company/jobs/${saved.id}/slots`, { method: 'PUT', body: slots.value() });
       toast(j.id ? '已儲存變更' : '職缺已進入卡池，開始媒合！');
       currentJobId = saved.id;
       await loadJobs();
@@ -230,8 +243,10 @@ async function showJob(jobId) {
         <button class="btn ${closed ? 'primary' : ''}" id="toggle-job">${closed ? '↺ 重新開放' : '🔒 關閉職缺'}</button>
       </div>
     </div>
+    <div class="panel slot-summary" id="slot-summary"><span class="muted small">載入面試時段…</span></div>
     <div id="job-body"><div class="empty"><span class="spinner dark"></span> 載入應徵者…</div></div>`;
   $('#edit-job').onclick = () => showJobForm(job);
+  renderSlotSummary(job);
   $('#toggle-job').onclick = async () => {
     const next = closed ? 'open' : 'closed';
     const yes = await confirmDialog(next === 'closed'
@@ -342,8 +357,8 @@ async function showJob(jobId) {
     }
 
     const setStatus = async (status, extra = {}) => {
-      await api(`/company/applications/${a.id}/status`, { method: 'POST', body: { status, ...extra } });
-      Object.assign(a, { status }, extra);
+      const updated = await api(`/company/applications/${a.id}/status`, { method: 'POST', body: { status, ...extra } });
+      Object.assign(a, { status, interview: updated.interview });
       renderList(a.id);
       renderDetail(a);
       $('#analytics').outerHTML = analyticsHtml(job, apps);
@@ -361,7 +376,7 @@ async function showJob(jobId) {
           if (yes) { await setStatus('rejected'); toast('已通知同學'); }
         } else {
           const interview = await interviewDialog(a, job);
-          if (interview) { await setStatus('interview', { interview }); toast('已用 LINE 通知同學面試邀請'); }
+          if (interview) { await setStatus('interview', { interview }); toast(interview.booking ? '已用 LINE 請同學選面試時段' : '已用 LINE 通知同學面試邀請'); }
         }
       } catch (err) {
         toast(err.message);
@@ -373,17 +388,83 @@ async function showJob(jobId) {
   renderDetail(apps[0]);
 }
 
+// =============== 面試時段：職缺頁的摘要與管理視窗 ===============
+async function renderSlotSummary(job) {
+  const el = $('#slot-summary');
+  let data;
+  try {
+    data = await api(`/company/jobs/${job.id}/slots`);
+  } catch {
+    el.innerHTML = '<span class="muted small">面試時段載入失敗</span>';
+    return;
+  }
+  if (!$('#slot-summary') || currentJobId !== job.id) return;
+  const now = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16);
+  const future = data.slots.filter((x) => x.start > now);
+  const open = future.filter((x) => x.booked < x.capacity).length;
+  const bookedCount = future.reduce((n, x) => n + x.booked, 0);
+  const st = data.settings;
+  el.innerHTML = `
+    <div class="grow">
+      <b>🗓 面試預約時段</b>
+      <div class="muted small">${future.length
+        ? `可預約 ${open} 個時段・已預約 ${bookedCount} 人・每格 ${st.minutes} 分鐘、${st.capacity} 人・同學需在 ${st.replyDays} 天內回覆`
+        : '還沒有開放時段。開放後，邀請面試時可以讓同學自己選時間。'}</div>
+    </div>
+    <button class="btn ${future.length ? '' : 'primary'}" id="manage-slots">${future.length ? '管理時段' : '＋ 設定面試時段'}</button>`;
+  $('#manage-slots').onclick = () => openSlotManager(job, data);
+}
+
+function openSlotManager(job, data) {
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-backdrop';
+  wrap.innerHTML = `
+    <div class="modal wide" role="dialog" aria-modal="true">
+      <h3>🗓 面試預約時段・${esc(job.title)}</h3>
+      <div id="slot-modal-editor"></div>
+      <div class="modal-foot"><button class="btn" data-no>取消</button><button class="btn primary" data-yes>✓ 儲存時段</button></div>
+    </div>`;
+  document.body.append(wrap);
+  const editor = slotEditor($('#slot-modal-editor', wrap), data);
+  wrap.onclick = (e) => { if (e.target === wrap || e.target.closest('[data-no]')) wrap.remove(); };
+  $('[data-yes]', wrap).onclick = async (e) => {
+    e.currentTarget.disabled = true;
+    try {
+      const r = await api(`/company/jobs/${job.id}/slots`, { method: 'PUT', body: editor.value() });
+      wrap.remove();
+      toast(r.kept ? `已儲存；${r.kept} 個已有人預約的時段會保留給已預約的同學，不再開放給其他人` : `已儲存，目前可預約 ${r.open} 個時段`);
+      Object.assign(job, { interviewBooking: editor.value().settings });
+      renderSlotSummary(job);
+    } catch (err) {
+      e.currentTarget.disabled = false;
+      toast(err.message);
+    }
+  };
+}
+
 // 已送出的結果（不能再改）
 function resultHtml(a) {
   if (a.status === 'rejected') return '<div class="result bad">✕ 已標記為不適合，並已通知同學（無法更改）</div>';
   const i = a.interview || {};
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const booking = !i.booking ? ''
+    : i.slot ? `<div>🗓 同學已預約：<b>${esc(slotText(i.slot, i.minutes))}</b></div>`
+      : i.unavailable ? `<div class="warn-text">⚠️ 同學表示時段都不方便${i.unavailable.note ? `：「${esc(i.unavailable.note)}」` : ''}。新增時段後同學就能重新選。</div>`
+        : today > i.replyBy ? `<div class="warn-text">⚠️ 已超過回覆期限（${esc(i.replyBy)}），同學還沒選時段</div>`
+          : `<div>⏳ 等待同學選時段（期限 ${esc(i.replyBy)}）</div>`;
   return `<div class="result ok"><b>✓ 已邀請面試，並已用 LINE 通知同學</b>
-    ${i.date ? `<div>📅 ${esc(i.date)} ${esc(i.time)}${i.mode ? `・${esc(i.mode)}` : ''}${i.place ? `・📍 ${esc(i.place)}` : ''}</div>` : ''}
+    ${booking}
+    ${i.date && !i.booking ? `<div>📅 ${esc(i.date)} ${esc(i.time)}</div>` : ''}
+    ${i.mode || i.place ? `<div>${i.mode ? `💬 ${esc(i.mode)}` : ''}${i.place ? `・📍 ${esc(i.place)}` : ''}</div>` : ''}
     ${i.note ? `<div class="muted small">${esc(i.note)}</div>` : ''}</div>`;
 }
 
-// 邀請面試：填日期、時間、方式，送出後用 LINE 傳給同學
-function interviewDialog(a, job) {
+// 邀請面試：讓同學從面試時段自己選（預設），或直接指定時間；送出後用 LINE 傳給同學
+async function interviewDialog(a, job) {
+  let data = { settings: DEFAULT_BOOKING, slots: [] };
+  try { data = await api(`/company/jobs/${job.id}/slots`); } catch {}
+  const now = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 16);
+  const open = data.slots.filter((x) => x.start > now && x.booked < x.capacity).length;
   return new Promise((resolve) => {
     const tomorrow = new Date(Date.now() + 86400e3 + 8 * 3600e3).toISOString().slice(0, 10);
     const wrap = document.createElement('div');
@@ -392,9 +473,17 @@ function interviewDialog(a, job) {
       <form class="modal" id="iv-form">
         <h3>邀請 ${esc(a.resume.name || '同學')} 面試</h3>
         <p class="muted">${esc(job.title)}・送出後會立即用 LINE 通知同學，<b>無法更改</b>。</p>
-        <div class="grid2">
-          <label class="field"><span>面試日期</span><input class="input" type="date" name="date" min="${tomorrow}" value="${tomorrow}" required></label>
-          <label class="field"><span>時間</span><input class="input" type="time" name="time" value="14:00" required></label>
+        <div class="seg-pick" id="iv-how">
+          <button type="button" data-how="booking" class="${open ? 'on' : ''}" ${open ? '' : 'disabled'}>🗓 讓同學選時段<small>${open ? `目前 ${open} 個時段可預約` : '還沒有開放時段'}</small></button>
+          <button type="button" data-how="fixed" class="${open ? '' : 'on'}">📅 直接指定時間</button>
+        </div>
+        ${open ? '' : '<p class="muted small">想讓同學自己選時間？先到職缺頁的「面試預約時段」開放時段。</p>'}
+        <div data-for="booking">
+          <label class="field"><span>同學需在幾天內選好時段</span><select class="input" name="replyDays">${[2, 3, 5, 7, 10, 14].map((d) => `<option value="${d}" ${d === data.settings.replyDays ? 'selected' : ''}>${d} 天內</option>`).join('')}</select></label>
+        </div>
+        <div class="grid2" data-for="fixed">
+          <label class="field"><span>面試日期</span><input class="input" type="date" name="date" min="${tomorrow}" value="${tomorrow}"></label>
+          <label class="field"><span>時間</span><input class="input" type="time" name="time" value="14:00"></label>
         </div>
         <label class="field"><span>面試方式</span>
           <div class="chips" id="iv-mode">${['實體', '線上', '電話'].map((m, i) => `<button type="button" class="chip ${i === 0 ? 'on' : ''}" data-mode="${m}">${m}</button>`).join('')}</div></label>
@@ -404,7 +493,14 @@ function interviewDialog(a, job) {
         <div class="modal-foot"><button type="button" class="btn" data-no>取消</button><button class="btn primary">➤ 送出邀請</button></div>
       </form>`;
     let mode = '實體';
+    let how = open ? 'booking' : 'fixed';
     const form = wrap.querySelector('form');
+    const showHow = () => {
+      $$('[data-how]', wrap).forEach((b) => b.classList.toggle('on', b.dataset.how === how));
+      $$('[data-for]', wrap).forEach((el) => el.classList.toggle('hidden', el.dataset.for !== how));
+    };
+    showHow();
+    $$('[data-how]', wrap).forEach((b) => (b.onclick = () => { how = b.dataset.how; showHow(); }));
     const done = (v) => { wrap.remove(); resolve(v); };
     wrap.onclick = (e) => { if (e.target === wrap || e.target.closest('[data-no]')) done(null); };
     $$('[data-mode]', wrap).forEach((b) => (b.onclick = () => {
@@ -417,7 +513,10 @@ function interviewDialog(a, job) {
     form.onsubmit = (e) => {
       e.preventDefault();
       const f = Object.fromEntries(new FormData(form));
-      done({ date: f.date, time: f.time, mode, place: f.place, contact: f.contact, note: f.note });
+      const base = { mode, place: f.place, contact: f.contact, note: f.note };
+      if (how === 'booking') return done({ ...base, booking: true, replyDays: Number(f.replyDays) });
+      if (!f.date || !f.time) return toast('請填寫面試日期與時間');
+      done({ ...base, date: f.date, time: f.time });
     };
     document.body.append(wrap);
   });

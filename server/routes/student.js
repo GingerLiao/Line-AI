@@ -10,6 +10,7 @@ import { rankJobs } from '../ranking.js';
 import { embeddingModel } from '../ai.js';
 import { withEmbedding, stripEmbedding } from '../embeddings.js';
 import { cleanResumeFiles, withFileUrls, attachSourceFiles } from '../files.js';
+import { jobSlots, bookSlot, releaseSlot, canChooseSlot, slotLabel, nowLocal, httpError } from '../slots.js';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024, files: MAX_UPLOADS } });
 export const studentRouter = Router();
@@ -198,7 +199,7 @@ studentRouter.get('/saved', async (req, res) => {
   const apps = await db.find('applications', { studentId: me });
   const rows = await Promise.all(swipes.map(async (s) => {
     const app = apps.find((a) => a.jobId === s.jobId);
-    return { ...s, job: stripEmbedding(await db.get('jobs', s.jobId)), status: app?.status, interview: app?.interview };
+    return { ...s, job: stripEmbedding(await db.get('jobs', s.jobId)), appId: app?.id, status: app?.status, interview: app?.interview, canChoose: canChooseSlot(app?.interview) };
   }));
   res.json(rows.filter((r) => r.job));
 });
@@ -210,6 +211,64 @@ studentRouter.delete('/saved/:swipeId', async (req, res) => {
   if (swipe.action !== 'save') return res.status(400).json({ error: '已投遞的職缺不能取消收藏' });
   await db.remove('swipes', swipe.id);
   res.json({ ok: true });
+});
+
+// ---------- 面試時段預約 ----------
+async function invitedApp(req) {
+  const app = await db.get('applications', req.params.id);
+  if (!app || app.studentId !== req.user.userId) throw httpError(404, '找不到應徵紀錄');
+  if (app.status !== 'interview' || !app.interview?.booking) throw httpError(400, '這個面試不需要選時段');
+  return app;
+}
+
+// 可以選的時段（未來、還有名額；自己目前選的也列出來）
+studentRouter.get('/applications/:id/slots', async (req, res) => {
+  const app = await invitedApp(req);
+  const now = nowLocal();
+  const slots = (await jobSlots(app.jobId))
+    .filter((s) => s.start > now && (s.booked.includes(app.id) || (!s.closed && s.booked.length < s.capacity)))
+    .map((s) => ({ start: s.start, minutes: s.minutes, left: s.capacity - s.booked.length, mine: s.booked.includes(app.id) }));
+  res.json({ slots, interview: app.interview, canChoose: canChooseSlot(app.interview) });
+});
+
+// 預約或更改時段
+studentRouter.post('/applications/:id/book', async (req, res) => {
+  const app = await invitedApp(req);
+  if (!canChooseSlot(app.interview)) {
+    throw httpError(400, app.interview.slot ? '面試前 24 小時內不能更改時段，請直接聯絡企業' : '已超過回覆期限，請直接聯絡企業');
+  }
+  const changed = Boolean(app.interview.slot);
+  const slot = await bookSlot(app, req.body.start);
+  const interview = {
+    ...app.interview, slot: slot.start, minutes: slot.minutes,
+    date: slot.start.slice(0, 10), time: slot.start.slice(11, 16), unavailable: null, bookedAt: new Date().toISOString(),
+  };
+  await db.update('applications', app.id, { interview });
+  const [job, resume] = await Promise.all([db.get('jobs', app.jobId), db.get('resumes', app.resumeId)]);
+  await pushMessage(app.companyId, linkCard({
+    title: changed ? '應徵者更改了面試時段' : '應徵者已預約面試時段 🗓',
+    body: `${resume?.name || app.resumeSnapshot?.name || '同學'}（${job.title}）\n${slotLabel(slot.start, slot.minutes)}`,
+    buttonLabel: '查看應徵者',
+    url: liffUrl('company', `?job=${job.id}`),
+  }));
+  res.json({ interview, canChoose: canChooseSlot(interview) });
+});
+
+// 時段都不方便：告訴企業（已選的時段會釋出）
+studentRouter.post('/applications/:id/unavailable', async (req, res) => {
+  const app = await invitedApp(req);
+  if (app.interview.slot) await releaseSlot(app, app.interview.slot);
+  const note = String(req.body.note || '').trim().slice(0, 300);
+  const interview = { ...app.interview, slot: null, date: '', time: '', unavailable: { note, at: new Date().toISOString() } };
+  await db.update('applications', app.id, { interview });
+  const [job, resume] = await Promise.all([db.get('jobs', app.jobId), db.get('resumes', app.resumeId)]);
+  await pushMessage(app.companyId, linkCard({
+    title: '應徵者表示面試時段都不方便',
+    body: `${resume?.name || app.resumeSnapshot?.name || '同學'}（${job.title}）${note ? `\n「${note}」` : ''}\n可以新增時段，同學就能重新選擇。`,
+    buttonLabel: '查看應徵者',
+    url: liffUrl('company', `?job=${job.id}`),
+  }));
+  res.json({ interview, canChoose: canChooseSlot(interview) });
 });
 
 // 從收藏中投遞

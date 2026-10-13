@@ -163,3 +163,19 @@ input[type=range] { width: 100%; accent-color: var(--green); }
 .saved-seg button em { font-style: normal; font-size: 12px; min-width: 18px; padding: 0 5px; border-radius: 9px; background: #dfe3e0; color: var(--muted); }
 .saved-seg button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
 .saved-seg button.on em { background: var(--green); color: #fff; }
+.share-btn { color: var(--green-dark, #04964a); display: grid; place-items: center; }
+
+/* 面試時段預約 */
+.booking-box { border: 1.5px solid #06c755; border-radius: 14px; padding: 14px; margin: 0 0 14px; display: grid; gap: 10px; background: #fbfefc; }
+.bk-title { font-weight: 700; display: grid; gap: 2px; }
+.bk-done { font-size: 14px; }
+.bk-days { display: grid; gap: 10px; max-height: 320px; overflow: auto; }
+.bk-date { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+.bk-times { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 6px; }
+.bk-time { border: 1.5px solid var(--line); background: #fff; border-radius: 10px; padding: 6px 4px; font-weight: 700; font-size: 15px; cursor: pointer; }
+.bk-time small { display: block; font-weight: 400; font-size: 11px; color: var(--muted); }
+.bk-time.on { border-color: #06c755; background: #06c755; color: #fff; }
+.bk-time.on small { color: #e6fbef; }
+.bk-time.mine { border-style: dashed; opacity: .7; }
+.bk-none summary { font-size: 13px; color: var(--muted); cursor: pointer; }
+.bk-none textarea { margin: 8px 0; min-height: 56px; }

@@ -7,6 +7,8 @@
 //   set(col, id, data)      以指定 id 寫入（覆蓋）
 //   update(col, id, patch)  部分更新
 //   remove(col, id)         刪除一筆
+//   transact(col, id, fn)   讀出一筆 → fn(舊資料) 回傳新資料 → 寫回；同時有人改時不會互相蓋掉（面試時段預約用）
+//                           fn 回傳 null 代表不寫入；fn 丟出錯誤就整個取消
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -71,6 +73,19 @@ function createFirestoreDb() {
         await store.collection(col).doc(id).delete();
         touch(col);
       },
+      async transact(col, id, fn) {
+        const ref = store.collection(col).doc(id);
+        const out = await store.runTransaction(async (t) => {
+          const next = fn(withId(await t.get(ref)));
+          if (next) {
+            const { id: _, ...data } = next;
+            t.set(ref, data);
+          }
+          return next;
+        });
+        touch(col);
+        return out && { ...out, id };
+      },
     };
   });
 }
@@ -117,6 +132,17 @@ function createJsonDb() {
     async remove(col, id) {
       delete table(col)[id];
       save();
+    },
+    // Node 是單執行緒，這裡沒有 await，讀和寫之間不會被別的請求插隊
+    async transact(col, id, fn) {
+      const old = table(col)[id];
+      const next = fn(old ? { id, ...old } : null);
+      if (next) {
+        const { id: _, ...data } = next;
+        table(col)[id] = data;
+        save();
+      }
+      return next && { ...next, id };
     },
   };
 }

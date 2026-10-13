@@ -50,6 +50,7 @@ const UPLOAD_ERRORS = { LIMIT_FILE_SIZE: '檔案太大，每個檔案請小於 1
 
 app.use((err, req, res, next) => {
   if (err.name === 'MulterError') return res.status(400).json({ error: UPLOAD_ERRORS[err.code] || err.message });
+  if (err.status) return res.status(err.status).json({ error: err.message }); // 預期內的錯誤（例如時段被搶走）
   console.error(err);
   res.status(500).json({ error: err.message });
 });

@@ -9,6 +9,8 @@ import { parseAddress } from '../../public/shared/taiwan.js';
 import { pushMessage, linkCard, liffUrl } from '../line.js';
 import { withEmbedding, stripEmbedding } from '../embeddings.js';
 import { withFileUrls } from '../files.js';
+import { bookingSettings, jobSlots, saveSlots, openSlots, addDays, dateLabel } from '../slots.js';
+import { today } from '../matching.js';
 
 const upload = multer({ limits: { fileSize: 10 * 1024 * 1024, files: MAX_UPLOADS } });
 export const companyRouter = Router();
@@ -44,6 +46,7 @@ companyRouter.post('/jobs', async (req, res) => {
     daysPerWeek: Number(data.daysPerWeek) || 0,
     durationMonths: Number(data.durationMonths) || 0,
     headcount: Number(data.headcount) || 0,
+    interviewBooking: bookingSettings(data.interviewBooking),
     ...parseAddress(data.location), // 從地址辨識縣市與行政區，給學生用地區篩選
     companyId: req.user.userId,
     updatedAt: new Date().toISOString(),
@@ -70,6 +73,34 @@ companyRouter.post('/jobs/:id/status', async (req, res) => {
 
 // ---------- 應徵者（後台篩選）----------
 // 清單只做規則比對（很快、不花 AI 額度）；AI 摘要等點開某位應徵者時才算
+// ---------- 面試時段（同一職缺的應徵者共用）----------
+companyRouter.get('/jobs/:jobId/slots', async (req, res) => {
+  const job = await ownJob(req, req.params.jobId);
+  if (!job) return res.status(404).json({ error: '找不到職缺' });
+  const [slots, apps] = await Promise.all([jobSlots(job.id), db.find('applications', { jobId: job.id })]);
+  const nameOf = async (appId) => {
+    const app = apps.find((a) => a.id === appId);
+    const resume = app && ((await db.get('resumes', app.resumeId)) || app.resumeSnapshot);
+    return resume?.name || '同學';
+  };
+  res.json({
+    settings: bookingSettings(job.interviewBooking),
+    slots: await Promise.all(slots.map(async ({ id, jobId, companyId, booked, ...s }) => ({
+      ...s, closed: Boolean(s.closed), booked: booked.length, names: await Promise.all(booked.map(nameOf)),
+    }))),
+  });
+});
+
+// 儲存時段：{ settings: { minutes, capacity, replyDays, startHour, endHour }, starts: ['2026-10-20T14:00', …] }
+companyRouter.put('/jobs/:jobId/slots', async (req, res) => {
+  const job = await ownJob(req, req.params.jobId);
+  if (!job) return res.status(404).json({ error: '找不到職缺' });
+  const settings = bookingSettings(req.body.settings);
+  await db.update('jobs', job.id, { interviewBooking: settings });
+  const { kept } = await saveSlots(job, settings, req.body.starts);
+  res.json({ ok: true, kept, open: (await openSlots(job.id)).length });
+});
+
 companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
   const job = await ownJob(req, req.params.jobId);
   if (!job) return res.status(404).json({ error: '找不到職缺' });
@@ -119,11 +150,16 @@ companyRouter.post('/applications/:id/status', async (req, res) => {
   let interview = null;
   if (status === 'interview') {
     const i = req.body.interview || {};
-    interview = {
-      date: clip(i.date, 10), time: clip(i.time, 5), mode: clip(i.mode, 10),
-      place: clip(i.place), contact: clip(i.contact, 100), note: clip(i.note, 500),
-    };
-    if (!interview.date || !interview.time) return res.status(400).json({ error: '請填寫面試日期與時間' });
+    const base = { mode: clip(i.mode, 10), place: clip(i.place), contact: clip(i.contact, 100), note: clip(i.note, 500) };
+    if (i.booking) {
+      // 讓同學自己從面試時段中選，回覆期限由企業決定
+      if (!(await openSlots(app.jobId)).length) return res.status(400).json({ error: '這個職缺還沒有可預約的面試時段，請先設定' });
+      const days = Math.min(30, Math.max(1, Number(i.replyDays) || 7));
+      interview = { ...base, booking: true, replyBy: addDays(today(), days), slot: null, date: '', time: '' };
+    } else {
+      interview = { ...base, date: clip(i.date, 10), time: clip(i.time, 5) };
+      if (!interview.date || !interview.time) return res.status(400).json({ error: '請填寫面試日期與時間' });
+    }
     patch.interview = interview;
   }
   const updated = await db.update('applications', app.id, patch);
@@ -133,7 +169,9 @@ companyRouter.post('/applications/:id/status', async (req, res) => {
     const lines = [
       `${job.companyName}「${job.title}」想邀請你面試！`,
       '',
-      `📅 ${interview.date}（${'日一二三四五六'[new Date(interview.date).getDay()]}）${interview.time}`,
+      interview.booking
+        ? `🗓 請在 ${dateLabel(interview.replyBy)} 前，點下方按鈕選一個方便的面試時段`
+        : `📅 ${dateLabel(interview.date)} ${interview.time}`,
       interview.mode && `💬 ${interview.mode}面試`,
       interview.place && `📍 ${interview.place}`,
       interview.contact && `☎️ 聯絡人：${interview.contact}`,
@@ -142,7 +180,7 @@ companyRouter.post('/applications/:id/status', async (req, res) => {
     await pushMessage(app.studentId, linkCard({
       title: '你收到面試邀請！🎉',
       body: lines.join('\n'),
-      buttonLabel: '查看詳情',
+      buttonLabel: interview.booking ? '選擇面試時段' : '查看詳情',
       url: liffUrl('student', `?tab=saved&job=${job.id}`),
     }));
   } else if (status === 'rejected') {

@@ -137,3 +137,32 @@ table.checks tr.no td.mark { color: var(--red); }
 .entry-links { display: flex; gap: 14px; font-size: 13px; }
 .entry-links a { color: var(--green-dark); }
 @media (max-width: 1100px) { .resume-grid { grid-template-columns: 1fr; } }
+
+/* 面試預約時段 */
+.slot-summary { display: flex; align-items: center; gap: 16px; }
+.slot-settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 0 12px; }
+.hour-range { display: flex; align-items: center; gap: 6px; }
+.hour-range select { flex: 1; min-width: 0; }
+.slot-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 6px; }
+.slot-bar .grow { flex: 1; }
+.slot-tip { margin: 0 0 8px; }
+.slot-grid-wrap { overflow: auto; max-height: 460px; border: 1px solid var(--line); border-radius: 10px; }
+.slot-grid { border-collapse: collapse; width: 100%; min-width: 560px; user-select: none; font-size: 12px; }
+.slot-grid th { position: sticky; top: 0; background: #fff; font-weight: 600; padding: 6px 4px; z-index: 1; }
+.slot-grid th small { display: block; color: var(--muted); font-weight: 400; }
+.slot-grid th.today { color: var(--green-dark, #04964a); }
+.slot-grid tbody th { position: sticky; left: 0; color: var(--muted); font-weight: 400; text-align: right; padding-right: 8px; width: 52px; }
+.slot-grid td { border: 1px solid #eef1ef; height: 26px; text-align: center; cursor: pointer; touch-action: none; color: #fff; font-weight: 700; }
+.slot-grid td:hover { background: #e8f8ee; }
+.slot-grid td.on { background: #06c755; }
+.slot-grid td.booked { background: #04964a; }
+.slot-grid td.past { background: #f5f6f5; cursor: default; }
+.slot-booked { margin-top: 10px; display: grid; gap: 4px; }
+.modal.wide { max-width: 920px; width: min(920px, calc(100vw - 32px)); max-height: calc(100vh - 40px); overflow: auto; }
+.seg-pick { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+.seg-pick button { border: 1.5px solid var(--line); background: #fff; border-radius: 10px; padding: 10px; font-weight: 600; cursor: pointer; text-align: left; }
+.seg-pick button small { display: block; font-weight: 400; color: var(--muted); margin-top: 2px; }
+.seg-pick button.on { border-color: #06c755; background: #effbf3; }
+.seg-pick button:disabled { opacity: .5; cursor: not-allowed; }
+.warn-text { color: #b45309; }
+.slot-grid td.booked.closed { background: repeating-linear-gradient(45deg, #04964a, #04964a 4px, #4cb87f 4px, #4cb87f 8px); }

@@ -297,11 +297,17 @@ function openJobDetail(job, extra = {}) {
     <div style="margin-top:20px;display:grid;gap:10px">
       ${extra.actionHtml || ''}
       <button class="btn ${extra.actionHtml ? '' : 'primary'} block" id="do-check">✨ AI 職涯健檢：我適合這個職缺嗎？</button>
-      <button class="btn block" id="do-share">📤 用 LINE 分享給朋友</button>
     </div>
   `);
   $('#do-check', body).onclick = () => openCareerCheck(job);
-  $('#do-share', body).onclick = () => shareJob(job);
+  // 標題旁的分享按鈕
+  const share = document.createElement('button');
+  share.className = 'icon-btn share-btn';
+  share.title = '用 LINE 分享給朋友';
+  share.setAttribute('aria-label', '用 LINE 分享給朋友');
+  share.innerHTML = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7"/><path d="M16 6l-4-4-4 4"/><path d="M12 2v13"/></svg>';
+  share.onclick = () => shareJob(job);
+  $('#sheet-root .sheet-head [data-close]').before(share);
   return body;
 }
 
@@ -655,7 +661,6 @@ function openResumeEditor(resume) {
     ${resume ? '' : `
     <div class="box green import-box">
       <b>✨ 丟資料給 AI，自動建好履歷</b>
-      <p class="small muted">什麼都可以丟：舊履歷、作品集、證照照片、成績單、截圖（PDF、Word、PowerPoint、照片都可以，可以一次選好幾個）。作品和證照檔案會自動附到履歷對應的那一筆。</p>
       <div id="r-files"></div>
       <span class="import-label">✍️ 補充文字（可以直接貼上，也可以在這裡貼上截圖）</span>
       <textarea class="input" id="r-text" placeholder="例如：自我介紹、社團經歷、修過的課…"></textarea>
@@ -892,6 +897,7 @@ async function loadSaved() {
   const canApply = (r) => r.action === 'save' && r.job.status !== 'closed' && daysLeft(r.job.deadline) >= 0;
   const statusTag = (r) => {
     const left = daysLeft(r.job.deadline);
+    if (r.status === 'interview' && r.interview?.booking && !r.interview.slot && r.canChoose) return '<span class="tag warn">🎉 邀請面試・請選時段</span>';
     if (r.action === 'apply') return `<span class="tag ${r.status === 'rejected' ? 'bad' : ''}">${STATUS_TEXT[r.status] || '已投遞'}</span>`;
     if (r.job.status === 'closed') return '<span class="tag bad">職缺已關閉</span>';
     return `<span class="tag warn">🔔 已收藏${left !== null ? (left >= 0 ? `・剩 ${left} 天截止` : '・已截止') : ''}</span>`;
@@ -899,11 +905,13 @@ async function loadSaved() {
   const interviewHtml = (i) => (i ? `
     <div class="interview">
       <b>🎉 面試資訊</b>
-      <div>📅 ${esc(i.date)} ${esc(i.time)}${i.mode ? `・${esc(i.mode)}` : ''}</div>
+      <div>${interviewWhen(i)}${i.mode ? `・${esc(i.mode)}` : ''}</div>
       ${i.place ? `<div>📍 ${esc(i.place)}</div>` : ''}
       ${i.contact ? `<div>☎️ ${esc(i.contact)}</div>` : ''}
       ${i.note ? `<div class="muted">${esc(i.note)}</div>` : ''}
     </div>` : '');
+
+  const detailStatus = (r) => `<div style="margin-bottom:12px">${statusTag(r)}</div>${r.status === 'interview' ? interviewHtml(r.interview) : ''}`;
 
   // 收藏的職缺可以像 iPhone 一樣往左滑，露出右邊的「刪除」（取消收藏）
   list.innerHTML = rows.map((r) => {
@@ -956,7 +964,7 @@ async function loadSaved() {
     if (el.dataset.swiped) return; // 剛滑開／滑回時不要打開詳情
     const row = rows.find((r) => r.id === el.dataset.open);
     const body = openJobDetail(row.job, {
-      statusHtml: `<div style="margin-bottom:12px">${statusTag(row)}</div>${row.status === 'interview' ? interviewHtml(row.interview) : ''}`,
+      statusHtml: `<div id="detail-status">${detailStatus(row)}</div>${row.status === 'interview' && row.interview?.booking ? '<div class="booking-box" id="booking-box"></div>' : ''}`,
       actionHtml: (canApply(row) ? '<button class="btn primary block" id="detail-apply">➤ 投遞這個職缺</button>' : '')
         + (row.action === 'save' ? '<button class="btn block" id="detail-unsave">🔕 取消收藏</button>' : ''),
     });
@@ -964,6 +972,9 @@ async function loadSaved() {
     if (btn) btn.onclick = () => { closeSheet(); applyFromSaved(row); };
     const un = $('#detail-unsave', body);
     if (un) un.onclick = () => { closeSheet(); unsave(row); };
+    const bookingBox = $('#booking-box', body);
+    // 選好時段後，上方的狀態與面試資訊跟著更新
+    if (bookingBox) mountBooking(bookingBox, row, () => { const el = $('#detail-status', body); if (el) el.innerHTML = detailStatus(row); });
   }));
   // 從 LINE 推播（例如面試邀請）點進來：自動打開那個職缺
   if (openJobId) {
@@ -971,6 +982,96 @@ async function loadSaved() {
     openJobId = null;
     if (row) $(`[data-open="${row.id}"]`, list)?.click();
   }
+}
+
+// =============== 面試時段預約 ===============
+const WEEKDAY = '日一二三四五六';
+const dayLabel = (date) => `${mmdd(date)}（${WEEKDAY[new Date(`${date}T00:00:00`).getDay()]}）`;
+function slotEnd(start, minutes) {
+  const [h, m] = start.slice(11, 16).split(':').map(Number);
+  const t = h * 60 + m + (minutes || 0);
+  return `${String(Math.floor(t / 60) % 24).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+}
+const slotText = (start, minutes) => `${dayLabel(start.slice(0, 10))} ${start.slice(11, 16)}${minutes ? `–${slotEnd(start, minutes)}` : ''}`;
+
+// 面試時間那一行：指定時間／已選時段／等待選時段
+function interviewWhen(i) {
+  if (!i.booking) return `📅 ${esc(i.date)} ${esc(i.time)}`;
+  if (i.slot) return `📅 ${esc(slotText(i.slot, i.minutes))}`;
+  if (i.unavailable) return '⏳ 已告知企業時段都不方便，等企業新增時段';
+  if (daysLeft(i.replyBy) < 0) return '⚠️ 已超過選時段的期限，請直接聯絡企業';
+  return `🗓 請在 <b>${dayLabel(i.replyBy)}</b> 前選擇面試時段`;
+}
+
+async function mountBooking(box, row, onChange = () => {}) {
+  box.innerHTML = '<div class="muted small"><span class="spinner dark"></span> 載入面試時段…</div>';
+  let data;
+  try {
+    data = await api(`/student/applications/${row.appId}/slots`);
+  } catch (err) {
+    box.innerHTML = `<div class="muted small">${esc(err.message)}</div>`;
+    return;
+  }
+  let { slots, interview: iv, canChoose } = data;
+  let picking = !iv.slot;
+  let chosen = null;
+
+  const render = () => {
+    const head = iv.slot
+      ? `<div class="bk-done">✅ 你的面試時段：<b>${esc(slotText(iv.slot, iv.minutes))}</b></div>
+         ${canChoose ? (picking ? '' : '<button class="btn block" data-change>更改時段</button>') : '<p class="muted small">面試前 24 小時內不能更改，有問題請直接聯絡企業。</p>'}`
+      : !canChoose ? '<p class="muted small">已超過選時段的期限，請直接聯絡企業。</p>'
+        : '<div class="bk-title">🗓 選一個方便的面試時段</div>';
+    const days = {};
+    slots.forEach((x) => (days[x.start.slice(0, 10)] ||= []).push(x));
+    const picker = canChoose && picking ? (slots.length ? `
+      <div class="bk-days">${Object.entries(days).map(([d, list]) => `
+        <div class="bk-day"><div class="bk-date">${dayLabel(d)}</div>
+          <div class="bk-times">${list.map((x) => `
+            <button type="button" class="bk-time ${x.mine ? 'mine' : ''} ${chosen === x.start ? 'on' : ''}" data-start="${x.start}" ${x.mine ? 'disabled' : ''}>
+              ${x.start.slice(11, 16)}<small>${x.mine ? '目前' : x.left > 1 ? `剩 ${x.left} 位` : '剩 1 位'}</small></button>`).join('')}
+          </div></div>`).join('')}</div>
+      <button class="btn primary block" data-book ${chosen ? '' : 'disabled'}>${chosen ? `確認預約 ${esc(slotText(chosen, slots.find((x) => x.start === chosen).minutes))}` : '請先選一個時段'}</button>`
+      : '<p class="muted small">目前沒有可以選的時段了。</p>')
+      + `<details class="bk-none"><summary>時段都不方便？</summary>
+          <textarea class="input" data-note placeholder="例如：平日下午都要上課，週六可以"></textarea>
+          <button class="btn block" data-unavail>告訴企業</button></details>` : '';
+    box.innerHTML = head + picker;
+
+    $$('[data-start]', box).forEach((b) => (b.onclick = () => { chosen = b.dataset.start; render(); }));
+    const change = $('[data-change]', box);
+    if (change) change.onclick = () => { picking = true; render(); };
+    const book = $('[data-book]', box);
+    if (book) book.onclick = async () => {
+      book.disabled = true;
+      book.innerHTML = '<span class="spinner"></span> 預約中…';
+      try {
+        const r = await api(`/student/applications/${row.appId}/book`, { method: 'POST', body: { start: chosen } });
+        toast('已預約，企業會收到通知 🎉');
+        Object.assign(row, { interview: r.interview, canChoose: r.canChoose });
+        onChange();
+        mountBooking(box, row, onChange);
+        if (currentTab === 'saved') loadSaved();
+      } catch (err) {
+        toast(err.message);
+        mountBooking(box, row, onChange); // 時段可能被搶走了，重新載入
+      }
+    };
+    const unavail = $('[data-unavail]', box);
+    if (unavail) unavail.onclick = async () => {
+      try {
+        const r = await api(`/student/applications/${row.appId}/unavailable`, { method: 'POST', body: { note: $('[data-note]', box).value } });
+        toast('已告訴企業，有新時段時可以再回來選');
+        Object.assign(row, { interview: r.interview, canChoose: r.canChoose });
+        onChange();
+        mountBooking(box, row, onChange);
+        if (currentTab === 'saved') loadSaved();
+      } catch (err) {
+        toast(err.message);
+      }
+    };
+  };
+  render();
 }
 
 // =============== 清單左滑刪除（像 iPhone）===============
