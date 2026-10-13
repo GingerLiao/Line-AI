@@ -101,6 +101,40 @@ companyRouter.put('/jobs/:jobId/slots', async (req, res) => {
   res.json({ ok: true, kept, open: (await openSlots(job.id)).length });
 });
 
+// 面試行程總表：所有職缺的面試時段、誰預約了哪一格、還在等誰選時段
+companyRouter.get('/schedule', async (req, res) => {
+  const me = req.user.userId;
+  const [jobs, slots, apps] = await Promise.all([
+    db.find('jobs', { companyId: me }), db.find('slots', { companyId: me }), db.find('applications', { companyId: me }),
+  ]);
+  const jobOf = Object.fromEntries(jobs.map((j) => [j.id, j]));
+  const invited = apps.filter((a) => a.status === 'interview' && jobOf[a.jobId]);
+  const names = Object.fromEntries(await Promise.all(invited.map(async (a) => {
+    const r = (await db.get('resumes', a.resumeId)) || a.resumeSnapshot;
+    return [a.id, { name: r?.name || '同學', school: [r?.school, r?.department].filter(Boolean).join(' ') }];
+  })));
+  const person = (a) => ({ appId: a.id, ...names[a.id], mode: a.interview.mode || '', place: a.interview.place || '', contact: a.interview.contact || '' });
+
+  // 有時間的面試：同學選的時段＋企業直接指定的時間
+  const booked = invited.filter((a) => a.interview?.date && a.interview?.time).map((a) => ({
+    start: `${a.interview.date}T${a.interview.time}`, minutes: a.interview.minutes || 0,
+    jobId: a.jobId, byStudent: Boolean(a.interview.booking), ...person(a),
+  }));
+  // 還沒有人選滿的時段（給企業看哪裡還空著）
+  const open = slots.filter((s) => jobOf[s.jobId] && !s.closed && s.booked.length < s.capacity)
+    .map((s) => ({ start: s.start, minutes: s.minutes, jobId: s.jobId, capacity: s.capacity, left: s.capacity - s.booked.length }));
+  // 邀請了但還沒選時段
+  const waiting = invited.filter((a) => a.interview?.booking && !a.interview.slot).map((a) => ({
+    jobId: a.jobId, replyBy: a.interview.replyBy, unavailable: a.interview.unavailable || null, ...person(a),
+  }));
+  res.json({
+    jobs: jobs.map((j) => ({ id: j.id, title: j.title, status: j.status })),
+    booked: booked.sort((a, b) => a.start.localeCompare(b.start)),
+    open: open.sort((a, b) => a.start.localeCompare(b.start)),
+    waiting,
+  });
+});
+
 companyRouter.get('/jobs/:jobId/applicants', async (req, res) => {
   const job = await ownJob(req, req.params.jobId);
   if (!job) return res.status(404).json({ error: '找不到職缺' });

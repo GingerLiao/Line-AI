@@ -166,3 +166,39 @@ table.checks tr.no td.mark { color: var(--red); }
 .seg-pick button:disabled { opacity: .5; cursor: not-allowed; }
 .warn-text { color: #b45309; }
 .slot-grid td.booked.closed { background: repeating-linear-gradient(45deg, #04964a, #04964a 4px, #4cb87f 4px, #4cb87f 8px); }
+
+/* 面試行程總表 */
+.side-link { display: block; width: 100%; text-align: left; border: 0; background: none; border-radius: 10px; padding: 10px 12px; margin-top: 10px; font-weight: 600; font-size: 14px; cursor: pointer; }
+.side-link:hover { background: var(--bg); }
+.side-link.on { background: #e9f0ff; }
+.sch-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.sch-head .grow { flex: 1; min-width: 240px; }
+.sch-head .sch-job { width: auto; min-width: 180px; }
+.seg-tabs { display: inline-flex; background: var(--bg); border-radius: 10px; padding: 3px; }
+.seg-tabs button { border: 0; background: none; padding: 7px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; color: var(--muted); }
+.seg-tabs button.on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.sch-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 0 0 16px; }
+.sch-stats .stat { background: #fff; border: 1px solid var(--line); }
+.sch-wrap { overflow: auto; border: 1px solid var(--line); border-radius: 10px; }
+.sch-grid { border-collapse: collapse; width: 100%; min-width: 860px; table-layout: fixed; font-size: 13px; }
+.sch-grid th { background: #fafbfa; padding: 8px 4px; font-weight: 600; border-bottom: 1px solid var(--line); }
+.sch-grid th small { display: block; color: var(--muted); font-weight: 400; }
+.sch-grid th.today { color: #04964a; }
+.sch-grid tbody th { width: 60px; color: var(--muted); font-weight: 600; vertical-align: top; text-align: right; padding-right: 8px; background: #fff; }
+.sch-grid thead th:first-child { width: 60px; }
+.sch-grid td { border: 1px solid #eef1ef; vertical-align: top; padding: 4px; }
+.sch-card { border-left: 4px solid var(--c); background: color-mix(in srgb, var(--c) 10%, #fff); border-radius: 6px; padding: 5px 7px; margin-bottom: 4px; }
+.sch-job-t { font-weight: 700; font-size: 12px; color: color-mix(in srgb, var(--c) 70%, #000); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sch-time { font-size: 11px; color: var(--muted); }
+.sch-name { border: 0; background: #fff; border-radius: 999px; padding: 2px 8px; margin: 3px 4px 0 0; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 0 0 1px var(--line); }
+.sch-name:hover { box-shadow: 0 0 0 1.5px var(--c, #06c755); }
+.sch-free { border: 1.5px dashed color-mix(in srgb, var(--c) 50%, #fff); border-radius: 6px; padding: 4px 7px; margin-bottom: 4px; font-size: 11px; color: var(--muted); }
+.sch-free span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sch-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.sch-table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--line); background: #fafbfa; }
+.sch-table td { padding: 9px 10px; border-bottom: 1px solid #eef1ef; vertical-align: top; }
+.sch-table tr.past td { opacity: .5; }
+.sch-table .sch-name { --c: #06c755; margin: 0; }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 6px; }
+.slot-booked .sch-table { margin-top: 6px; }
+@media (max-width: 700px) { .sch-stats { grid-template-columns: repeat(2, 1fr); } }

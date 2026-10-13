@@ -4,6 +4,7 @@ import {
 } from '/shared/api.js';
 import { parseAddress, placeLabel } from '/shared/taiwan.js';
 import { slotEditor, slotText } from '/company/slots.js';
+import { showSchedule } from '/company/schedule.js';
 
 const CATEGORIES = ['數據分析', '軟體開發', '設計', '行銷企劃', '業務', '財務會計', '人力資源', '行政', '法務', '研究', '產品企劃', '影音製作', '媒體', '電商', '教育', '遊戲企劃', '餐飲'];
 const STATUS = {
@@ -30,12 +31,22 @@ if (!demo && cfg.oaBasicId && (await isFriend()) === false) {
   $('#friend-banner').classList.remove('hidden');
 }
 $('#new-job').onclick = () => showJobForm();
+$('#open-schedule').onclick = () => openSchedule();
 await loadJobs();
 
 const startJob = new URLSearchParams(location.search).get('job');
 if (startJob && jobs.some((j) => j.id === startJob)) showJob(startJob);
 else if (jobs.length) showJob(jobs[0].id);
 else showJobForm();
+
+// 面試行程總表
+function openSchedule() {
+  currentJobId = null;
+  $$('.job-link').forEach((b) => b.classList.remove('on'));
+  $('#open-schedule').classList.add('on');
+  setCrumb('面試行程');
+  showSchedule($('#main'), { openApp: (jobId, appId) => showJob(jobId, appId) });
+}
 
 function setCrumb(text) {
   $('#crumb').textContent = text;
@@ -54,6 +65,7 @@ async function loadJobs() {
 
 // =============== 刊登／編輯職缺（AI 建檔與手動填寫在同一頁）===============
 function showJobForm(job) {
+  $('#open-schedule')?.classList.remove('on');
   currentJobId = job?.id || null;
   $$('.job-link').forEach((b) => b.classList.toggle('on', b.dataset.job === currentJobId));
   setCrumb(job ? `編輯：${job.title}` : '刊登職缺');
@@ -225,7 +237,8 @@ function fillJobForm(j = {}) {
 }
 
 // =============== 職缺頁：概況 + 應徵者分析 + 應徵者 ===============
-async function showJob(jobId) {
+async function showJob(jobId, focusAppId = null) {
+  $('#open-schedule')?.classList.remove('on');
   currentJobId = jobId;
   $$('.job-link').forEach((b) => b.classList.toggle('on', b.dataset.job === jobId));
   const job = jobs.find((j) => j.id === jobId);
@@ -384,8 +397,9 @@ async function showJob(jobId) {
     }));
   };
 
-  renderList(apps[0].id);
-  renderDetail(apps[0]);
+  const first = apps.find((x) => x.id === focusAppId) || apps[0]; // 從面試行程點名字進來：直接打開那位
+  renderList(first.id);
+  renderDetail(first);
 }
 
 // =============== 面試時段：職缺頁的摘要與管理視窗 ===============

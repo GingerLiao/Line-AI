@@ -86,7 +86,10 @@ export function slotEditor(root, { settings, slots = [] }) {
       }).join('')}</tr>`).join('')}</tbody>`;
     const list = [...booked.values()].filter((b) => b.start > now).sort((a, b) => a.start.localeCompare(b.start));
     $('.slot-booked', root).innerHTML = list.length
-      ? `<div class="section-title">已預約的同學</div>${list.map((b) => `<div class="small">📅 ${slotText(b.start, b.minutes)}　${esc(b.names.join('、'))}（${b.booked}/${b.capacity}）${selected.has(b.start) ? '' : '<span class="muted">・不再開放</span>'}</div>`).join('')}`
+      ? `<div class="section-title">已預約的同學</div>
+        <table class="sch-table"><thead><tr><th>時段</th><th>應徵者</th><th>人數</th><th></th></tr></thead><tbody>
+        ${list.map((b) => `<tr><td>${slotText(b.start, b.minutes)}</td><td>${esc(b.names.join('、'))}</td><td>${b.booked}/${b.capacity}</td>
+          <td class="muted small">${selected.has(b.start) ? '' : '不再開放給其他人'}</td></tr>`).join('')}</tbody></table>`
       : '';
   };
 
